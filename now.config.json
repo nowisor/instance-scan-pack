@@ -1,0 +1,6 @@
+{
+  "scope": "x_nowisor_isp",
+  "scopeId": "2159d2d168744fc18f5a27536d212f88",
+  "name": "nowisor Instance Scan Pack",
+  "tsconfigPath": "./src/server/tsconfig.json"
+}

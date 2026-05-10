@@ -1,0 +1,8 @@
+.DS_Store
+.now/
+.now-sdk/
+dist/
+node_modules/
+target/
+*.tsbuildinfo
+.jest_cache
