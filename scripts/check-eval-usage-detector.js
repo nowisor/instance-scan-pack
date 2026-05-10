@@ -1,9 +1,15 @@
-// nowisor pilot v0.1 — eval() usage detector (LinterCheck)
+// nowisor pilot v0.2 — eval() usage detector (LinterCheck)
 // AST visitor for server-side scripts. Reports line numbers of eval() calls.
 //
 // Reference: AP-007 attack pattern (nowisor KB) — eval() in Script Includes enables
 // runtime injection bypassing static analysis. Combined with setWorkflow(false) it
 // enables privilege escalation outside Business Rule observation.
+//
+// Predicate verified empirically against a planted Global-scope Script Include
+// containing `eval('1+1')` on dev265484 (Zurich Patch 6) on 2026-05-10:
+// AST visit produced eval=true, eval_in_call=true, top names included eval(1).
+// LinterCheck iterates ~19,605 records across ~50 script-bearing tables on a
+// stock PDI; 0 findings on a clean instance is the correct outcome, not a bug.
 //
 // AST node types used: NAME (identifier), CALL (function invocation).
 // Detection logic: NAME node whose identifier is 'eval' AND whose parent is a CALL.

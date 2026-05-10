@@ -21,6 +21,18 @@ declare global {
                         table: 'scan_linter_check'
                         id: 'b6d3e0840f21424e908a542597b07387'
                     }
+                    'nowisor-priv-sys-user-has-role-read': {
+                        table: 'sys_scope_privilege'
+                        id: '22d228b15ca842e08a4fee89519a414f'
+                    }
+                    'nowisor-priv-sys-user-read': {
+                        table: 'sys_scope_privilege'
+                        id: '6a3ad5374b824bf5a6531be1b1f068ec'
+                    }
+                    'nowisor-priv-sys-user-role-read': {
+                        table: 'sys_scope_privilege'
+                        id: 'db986acd45394dc08c0eb013ae52916c'
+                    }
                     package_json: {
                         table: 'sys_module'
                         id: 'f60ef7d422a84adeb80533b2a6e00e58'

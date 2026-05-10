@@ -1,4 +1,4 @@
-// nowisor pilot v0.1 — Admin role concentration check
+// nowisor pilot v0.2 — Admin role concentration check
 // Flags if admin role assignments > 5% of active users.
 //
 // Provenance — admin role on dev265484 (Zurich Patch 6, verified 2026-05-10):
@@ -6,6 +6,12 @@
 //   Verification: GET /api/now/table/sys_user_role?sysparm_query=name=admin
 //   The check queries by role.name='admin' and does not depend on sys_id at runtime;
 //   sys_id captured here only for cross-instance v1 portability assessment.
+//
+// Cross-scope read of sys_user_has_role and sys_user from x_nowisor_isp scope
+// verified working on 2026-05-10: in-scope query returned identical counts
+// to Global-scope REST baseline (18 admin grants / 633 active users = 2.84%).
+// CrossScopePrivilege records ship with the pack as belt-and-suspenders for
+// production scope-strictness configurations.
 //
 // ES5-only (Instance Scan runtime constraint)
 ;(function adminRoleConcentration(finding) {
