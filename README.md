@@ -5,7 +5,7 @@ Open-source ServiceNow security check pack that runs inside your instance and pr
 - **Pack version:** 1.0.0
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **License:** Apache-2.0
-- **Verified against:** ServiceNow Zurich Patch 6 (dev265484), Australia GA (forthcoming dev377226 verification — see Compatibility)
+- **Verified against:** ServiceNow Zurich Patch 6 (dev265484). Australia Patch 2 install fails — see [Compatibility](#compatibility); v1.1 reactivation work.
 - **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 (only required if you build from source; the pre-built update set has no runtime SDK dependency)
 
 ## What this is
@@ -33,40 +33,44 @@ This pack is **not** a replacement for ServiceNow Security Center or the platfor
 
 ## Installation
 
-### Option A: Pre-built application bundle (recommended for non-developers)
+Install the pack via the ServiceNow Fluent SDK. The procedure is single-path: clone the repo, install dependencies, build, install. Both the SDK and Node 20+ are required.
 
-The pack distributes as a tarball of per-record ServiceNow XMLs (the modern source-driven SDK format), not a single legacy update set XML.
+> The artifact at `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is the build-output bundle (scope and per-record XMLs). It is **not** a standalone installer — it ships alongside the source for transparency and download-verification, not as a separate install path. A pure-UI install path that requires no local toolchain is on the v1.1 roadmap.
 
-1. Download `dist/update-sets/nowisor-agent-v1.0.0.tar.gz`
-2. Extract locally. You'll see `app/scope/` (1 file) and `app/update/` (46 files)
-3. Install via the SDK on a workstation that has the credentials configured:
-   ```bash
-   npm install -g @servicenow/sdk@4.6.0
-   npx now-sdk auth --add https://yourinstance.service-now.com --type basic --alias your-alias
-   # extract the tarball into a workspace, then:
-   npx now-sdk install --source <extracted-dir> --auth your-alias
-   ```
-4. Run the suite bootstrap (next section)
-5. Verify by navigating to **System Definition → Scan → Scan Checks** — you should see 26 active nowisor checks
+### Prerequisites
 
-If you cannot install the ServiceNow SDK locally, contact your ServiceNow administrator — they can install on your behalf. A pure-XML single-file distribution is on the v1.1 roadmap.
+- Node.js 20 or higher
+- `@servicenow/sdk` 4.6.0 or higher
+- Admin credentials on the target ServiceNow instance (Zurich Patch 6 verified; other releases see [Compatibility](#compatibility))
 
-### Option B: Build from source (developers / pinning to a fork)
+### Step 1 — Clone the source
 
 ```bash
 git clone https://github.com/nowisor-com/instance-scan-agent
 cd instance-scan-agent
 npm install
+```
+
+### Step 2 — Configure auth
+
+```bash
 npx now-sdk auth --add https://yourinstance.service-now.com --type basic --alias your-alias
+```
+
+The auth alias is stored in your local SDK config (credentials live in your OS keychain). One alias per target instance.
+
+### Step 3 — Build and install
+
+```bash
 npx now-sdk build
 npx now-sdk install --auth your-alias
 ```
 
-Then run the suite bootstrap (next section).
+The install uploads the built package to `sn_appclient_upload_processor.do` on the instance and creates the `x_nowisor_isp` scope. Watch the SDK output for any installation tracker errors.
 
-### Required post-install step: suite bootstrap
+### Step 4 — Run the suite bootstrap (required post-install step)
 
-ServiceNow's Fluent SDK 4.6.0 does not expose a `ScanCheckSuite` API. The suite that aggregates the 26 checks must be provisioned via Background Script after the update set installs.
+The Fluent SDK 4.6.0 does not expose a `ScanCheckSuite` API. The suite that aggregates the 26 checks must be provisioned via Background Script after the install.
 
 1. Navigate to **System Definition → Scripts - Background**
 2. Open [`bootstrap/install-suite.js`](./bootstrap/install-suite.js)
@@ -75,6 +79,10 @@ ServiceNow's Fluent SDK 4.6.0 does not expose a `ScanCheckSuite` API. The suite 
 5. Read the output — it should confirm "Suite … is ready" and list the number of checks linked
 
 The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`now-sdk install --reinstall`), the m2m rows are cascade-deleted — re-run the bootstrap to re-link them. `scan_finding` records persist across reinstalls.
+
+### Step 5 — Verify
+
+Navigate to **System Definition → Scan → Scan Checks**. You should see 26 active nowisor checks under the `x_nowisor_isp` scope.
 
 ## Running scans
 
@@ -230,8 +238,8 @@ The JSON should be valid JSON-parseable text after the `---NOWISOR_METADATA---` 
 
 | Release | Verified | Status |
 |---|---|---|
-| Zurich Patch 6 | dev265484 | Fully verified (property baseline complete) |
-| Australia (GA) | (forthcoming dev377226) | Pack expected to install cleanly; some property baselines pending |
+| Zurich Patch 6 | dev265484 | Fully verified — property baseline complete; 24/24 verification Background Scripts pass on a live instance |
+| Australia Patch 2 | dev377226 | **Install fails** — `sn_appclient_upload_processor.do` returns `application was null` on the v1.0.0 build. Root cause not yet investigated. Tracked as v1.1 reactivation work. |
 | Older releases (Yokohama, Xanadu, Washington DC) | not verified | Likely works but unverified; file an issue if you test |
 
 The 17 `CrossScopePrivilege` records ship with the pack so it functions correctly even in instances with strict scope isolation. The pack does not require admin elevation; the executing user needs read on `scan_finding`, `scan_check_*`, and the in-scope tables the audit checks touch (audit of sys_user, sys_security_acl, sys_script_include, etc.).
