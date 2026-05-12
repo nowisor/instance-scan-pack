@@ -1,8 +1,8 @@
 {
   "name": "nowisor-instance-scan-pack",
-  "version": "0.0.1",
-  "description": "",
-  "license": "UNLICENSED",
+  "version": "1.0.0",
+  "description": "nowisor Instance Scan Agent — open-source ServiceNow security check pack. Findings flow to the nowisor advisor at nowisor.com via the scan_finding v1 schema.",
+  "license": "Apache-2.0",
   "imports": {
     "#now:*": "./@types/servicenow/fluent/*/index.js"
   },

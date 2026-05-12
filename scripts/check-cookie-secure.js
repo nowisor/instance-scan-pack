@@ -1,12 +1,11 @@
-// nowisor v1.0.0 — CSRF token enforcement check
-// Verifies glide.security.use_csrf_token = 'true'
+// nowisor v1.0.0 — Cookie Secure flag enforcement check
+// Verifies glide.cookies.secure = 'true'
 // Property baseline: nowisor/verified_schema/releases/zurich/properties/all_properties_zurich_patch6.json
-// sys_id of property registration: f9f03ca50a0a0bb5658db64889d967cb
 // Schema: v1 (finding emits ---NOWISOR_METADATA--- block parsed by advisor)
 // ES5-only (Instance Scan runtime constraint)
-;(function csrfTokenEnforcement(finding) {
+;(function cookieSecure(finding) {
     var SENTINEL = '__NOT_SET__'
-    var PROP = 'glide.security.use_csrf_token'
+    var PROP = 'glide.cookies.secure'
     var value = gs.getProperty(PROP, SENTINEL)
 
     var notSetCase = value === SENTINEL
@@ -17,19 +16,19 @@
     var description
     if (notSetCase) {
         description =
-            'CSRF token enforcement property is not registered in sys_properties on this instance, indicating the security baseline has not been hardened post-install. CSRF protection is unverifiable.'
+            'Cookie Secure-flag enforcement property is not registered in sys_properties on this instance, so transport-layer protection on session cookies is unverifiable.'
     } else {
         description =
-            'CSRF token enforcement is disabled. The platform does not validate CSRF tokens on state-changing requests, exposing authenticated sessions to cross-site request forgery.'
+            'Cookie Secure flag enforcement is disabled. Session cookies may be transmitted over plain HTTP, allowing a network attacker on the same path to intercept and replay the authenticated session identifier.'
     }
 
     var metadata = {
-        nowisor_check_id: 'nowisor-csrf-token-enforcement',
+        nowisor_check_id: 'nowisor-cookie-secure',
         nowisor_check_version: '1.0.0',
         nowisor_finding_schema: 'v1',
         framework_mappings: {
-            nis2: ['21.2.a'],
-            iso27001: ['A.5.15'],
+            nis2: ['21.2.e'],
+            iso27001: ['A.8.23'],
             dora: ['9'],
         },
         evidence: {
@@ -38,8 +37,8 @@
             actual_value: notSetCase ? 'NOT_REGISTERED' : value,
         },
         severity: 1,
-        remediation_id: 'csrf-001',
-        attack_path_refs: ['AP-002'],
+        remediation_id: 'cookie-002',
+        attack_path_refs: [],
     }
 
     var details =

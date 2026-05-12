@@ -1,0 +1,445 @@
+{
+  "pack_name": "nowisor-instance-scan-agent",
+  "pack_version": "1.0.0",
+  "finding_schema_version": "v1",
+  "release_date": "2026-05-11",
+  "released_against": {
+    "servicenow_releases": ["zurich", "australia"],
+    "verified_on": ["dev265484"]
+  },
+  "checks": [
+    {
+      "id": "nowisor-csrf-token-enforcement",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "CSRF Token Enforcement",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-csrf-token-enforcement",
+      "framework_mappings": {
+        "nis2": ["21.2.a"],
+        "iso27001": ["A.5.15"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": ["AP-002"],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-session-timeout",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "Session Idle Timeout",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-session-timeout",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.8.5"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-cookie-http-only",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Cookie HttpOnly Enforcement",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-cookie-http-only",
+      "framework_mappings": {
+        "nis2": ["21.2.e"],
+        "iso27001": ["A.8.23"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-cookie-secure",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Cookie Secure Flag Enforcement",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-cookie-secure",
+      "framework_mappings": {
+        "nis2": ["21.2.e"],
+        "iso27001": ["A.8.23"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-secure-cookies",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Secure Cookies UI Property",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-secure-cookies",
+      "framework_mappings": {
+        "nis2": ["21.2.e"],
+        "iso27001": ["A.8.23"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-rest-anonymous-access",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "REST Anonymous Access Audit",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-rest-anonymous-access",
+      "framework_mappings": {
+        "nis2": ["21.2.d"],
+        "iso27001": ["A.5.16"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "audited_properties": [
+        "glide.basicauth.required.api",
+        "glide.basicauth.required.scriptedprocessor",
+        "glide.basicauth.required.soap",
+        "glide.basicauth.required.wsdl",
+        "glide.basicauth.required.xsd",
+        "glide.basicauth.required.databrokerrestapiprocessor",
+        "glide.basicauth.required.unl"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-mfa-enforcement",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "MFA Enforcement",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-mfa-enforcement",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.5.17"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-external-auth-policy",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "External Auth — Disable Local Login",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-external-auth-policy",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.5.16"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-admin-role-concentration",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Admin Role Concentration",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-admin-role-concentration",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.5.18", "A.8.2"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_user", "sys_user_has_role"],
+      "active": true
+    },
+    {
+      "id": "nowisor-inactive-users-with-roles",
+      "version": "1.0.0",
+      "type": "TableCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "Inactive Users Retaining Roles",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-inactive-users-with-roles",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.5.18"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_user"],
+      "active": true
+    },
+    {
+      "id": "nowisor-attachment-role-restriction",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "Attachment Role Restriction",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-attachment-role-restriction",
+      "framework_mappings": {
+        "nis2": ["21.2.h"],
+        "iso27001": ["A.5.34"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-oob-acl-modifications",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "OOB ACL Modifications",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-oob-acl-modifications",
+      "framework_mappings": {
+        "nis2": ["21.2.a"],
+        "iso27001": ["A.8.3"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_security_acl"],
+      "active": true
+    },
+    {
+      "id": "nowisor-cross-scope-privilege-grants",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "Cross-Scope Privilege Grants",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-cross-scope-privilege-grants",
+      "framework_mappings": {
+        "nis2": ["21.2.a"],
+        "iso27001": ["A.8.3"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_scope_privilege", "sys_scope"],
+      "active": true
+    },
+    {
+      "id": "nowisor-elevated-role-assignments",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "Elevated Role Co-Assignments",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-elevated-role-assignments",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.5.18"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_user", "sys_user_has_role", "sys_user_role"],
+      "active": true
+    },
+    {
+      "id": "nowisor-eval-usage-detector",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "eval() Usage Detector",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-eval-usage-detector",
+      "framework_mappings": {
+        "nis2": ["21.2.d"],
+        "iso27001": ["A.8.28"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": ["AP-007"],
+      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "active": true
+    },
+    {
+      "id": "nowisor-set-workflow-false-detector",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "setWorkflow(false) Detector",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-set-workflow-false-detector",
+      "framework_mappings": {
+        "nis2": ["21.2.f"],
+        "iso27001": ["A.8.15"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": ["AP-007"],
+      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "active": true
+    },
+    {
+      "id": "nowisor-glide-evaluator-detector",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "GlideEvaluator Dynamic Evaluation Detector",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-glide-evaluator-detector",
+      "framework_mappings": {
+        "nis2": ["21.2.d"],
+        "iso27001": ["A.8.28"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "active": true
+    },
+    {
+      "id": "nowisor-glide-record-vs-secure",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "GlideRecord vs GlideRecordSecure",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-glide-record-vs-secure",
+      "framework_mappings": {
+        "nis2": ["21.2.h"],
+        "iso27001": ["A.8.3"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_script_include", "sys_script"],
+      "active": true
+    },
+    {
+      "id": "nowisor-set-roles-detector",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "setRoles() Escalation Detector",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-set-roles-detector",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.5.18"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "active": true
+    },
+    {
+      "id": "nowisor-hardcoded-credentials",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Hardcoded Credentials Detector",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-hardcoded-credentials",
+      "framework_mappings": {
+        "nis2": ["21.2.i"],
+        "iso27001": ["A.8.5"],
+        "dora": ["9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "active": true
+    },
+    {
+      "id": "nowisor-direct-property-write",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "Direct sys_properties Write Detector",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-direct-property-write",
+      "framework_mappings": {
+        "nis2": ["21.2.a"],
+        "iso27001": ["A.8.9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_script_include", "sys_script"],
+      "active": true
+    },
+    {
+      "id": "nowisor-domain-separation-script-include",
+      "version": "1.0.0",
+      "type": "LinterCheck",
+      "category": "security",
+      "priority": 2,
+      "name": "Cross-Domain Script Include Reference",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-domain-separation-script-include",
+      "framework_mappings": {
+        "nis2": ["21.2.j"],
+        "iso27001": ["A.5.31"],
+        "gdpr": ["32"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_script_include"],
+      "active": true
+    },
+    {
+      "id": "nowisor-update-set-xml-suspicious",
+      "version": "1.0.0",
+      "type": "ColumnTypeCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Suspicious Update Set XML",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-update-set-xml-suspicious",
+      "framework_mappings": {
+        "nis2": ["21.2.f"],
+        "iso27001": ["A.8.32"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_update_xml"],
+      "active": true
+    },
+    {
+      "id": "nowisor-fabricated-property-references",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 3,
+      "name": "Fabricated Property References",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-fabricated-property-references",
+      "framework_mappings": {
+        "nis2": ["21.2.a"],
+        "iso27001": ["A.8.9"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_properties"],
+      "active": true
+    },
+    {
+      "id": "nowisor-meta-active-check-coverage",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "manageability",
+      "priority": 3,
+      "name": "Meta — Active Check Coverage",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-meta-active-check-coverage",
+      "framework_mappings": {},
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-platform-build-drift",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 3,
+      "name": "Platform Build Drift",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-platform-build-drift",
+      "framework_mappings": {
+        "nis2": ["21.2.a"],
+        "iso27001": ["A.8.32"]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    }
+  ]
+}
