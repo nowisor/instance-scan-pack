@@ -74,7 +74,7 @@
         var table = CHECK_TABLES[ti]
         try {
             var gr = new GlideRecord(table)
-            gr.addQuery('sys_scope.name', SCOPE_NAME)
+            gr.addQuery('sys_scope.scope', SCOPE_NAME)
             gr.addQuery('active', true)
             gr.query()
             while (gr.next()) {

@@ -85,7 +85,7 @@ curl -u admin:$SN_PASS -H 'Accept: application/json' \
   -X POST 'https://yourinstance.service-now.com/api/sn_cicd/instance_scan/full_scan'
 ```
 
-Returns a progress URL. Poll until status is `Successful`. Findings appear in the `scan_finding` table filtered by `check.sys_scope.name=x_nowisor_isp`.
+Returns a progress URL. Poll until status is `Successful`. Findings appear in the `scan_finding` table filtered by `check.sys_scope.scope=x_nowisor_isp`.
 
 ### Ad-hoc via UI
 
@@ -136,7 +136,7 @@ To parse all nowisor findings programmatically:
 ```javascript
 // In a Background Script — pulls all current nowisor findings as structured data
 var gr = new GlideRecord('scan_finding');
-gr.addQuery('check.sys_scope.name', 'x_nowisor_isp');
+gr.addQuery('check.sys_scope.scope', 'x_nowisor_isp');
 gr.query();
 while (gr.next()) {
     var details = gr.getValue('finding_details') || '';

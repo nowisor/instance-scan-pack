@@ -9,7 +9,7 @@ export const metaActiveCheckCoverageCheck = ScriptOnlyCheck({
     shortDescription:
         'Confirms all 26 nowisor v1.0.0 checks are installed and active in the x_nowisor_isp scope',
     description:
-        "Self-meta check. Queries scan_script_only_check, scan_table_check, scan_linter_check, and scan_column_type_check filtered to sys_scope.name='x_nowisor_isp' and active=true. If the active count is below the expected 26 (v1.0.0 inventory), emits a finding listing what is present so the operator can diagnose the install. A clean install produces no finding.",
+        "Self-meta check. Queries scan_script_only_check, scan_table_check, scan_linter_check, and scan_column_type_check filtered to sys_scope.scope='x_nowisor_isp' and active=true. If the active count is below the expected 26 (v1.0.0 inventory), emits a finding listing what is present so the operator can diagnose the install. A clean install produces no finding.",
     resolutionDetails: `If this check fires, the pack install is incomplete or partially deactivated:
 1. Re-run the pack installer to restore missing checks.
 2. Audit the Instance Scan check tables under x_nowisor_isp scope for inactive entries; reactivate as needed.

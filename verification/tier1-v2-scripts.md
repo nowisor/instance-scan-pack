@@ -67,7 +67,7 @@ Then in dev265484 Background Scripts, verify 26 active checks:
     var total = 0
     for (var i = 0; i < tables.length; i++) {
         var gr = new GlideRecord(tables[i])
-        gr.addQuery('sys_scope.name', 'x_nowisor_isp')
+        gr.addQuery('sys_scope.scope', 'x_nowisor_isp')
         gr.addQuery('active', true)
         gr.query()
         var n = gr.getRowCount()
@@ -172,7 +172,7 @@ Then check execution outcomes:
 ;(function smokeTest() {
     gs.print('=== Step 2.5: smoke test execution counts ===')
     var e = new GlideRecord('scan_check_execution')
-    e.addQuery('check.sys_scope.name', 'x_nowisor_isp')
+    e.addQuery('check.sys_scope.scope', 'x_nowisor_isp')
     e.orderByDesc('sys_created_on')
     e.setLimit(50)
     e.query()

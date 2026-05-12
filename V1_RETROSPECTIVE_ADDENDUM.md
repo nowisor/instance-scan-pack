@@ -10,10 +10,10 @@
 | Verification | Status | Evidence |
 |---|---|---|
 | 1. TableCheck API parameter | **PASS** | `conditions` confirmed in SDK 4.6.0, source, generated XML |
-| 2. Bootstrap idempotency | **PENDING USER** | Scripts prepared at `verification/tier1-v2-scripts.md`, dev265484 access required |
+| 2. Bootstrap idempotency | **PASS (with bug fix shipped)** | 26 checks deployed, suite idempotent, 26/26 clean execution. `sys_scope.name`→`sys_scope.scope` bug found and fixed in 5 files |
 | 3. CI gate dry-run | **PASS (with structural finding)** | Workflow runs and catches both synthetic failures; current file location won't trigger from monorepo subdirectory |
 
-**Tag status:** `v1.0.0-build` NOT YET APPLIED. Gated on V2 completion + user decision on workflow-location finding (V3).
+**Tag status:** `v1.0.0-build` NOT YET APPLIED. All three verifications passed; tagging now gated on user decisions documented in "Outstanding decisions" section (workflow location, branch fate).
 
 ---
 
@@ -64,36 +64,83 @@ The dev prompt's "Category B (6)" was a *semantic* grouping (ACL/role checks), n
 
 ## Verification 2 — Bootstrap idempotency on dev265484
 
-**Status:** PENDING USER EXECUTION
+**Status:** PASS (with bug fix shipped during verification)
 
-**Why pending:** This verification requires interactive Background Script execution on dev265484. Scripts have been prepared and staged at `verification/tier1-v2-scripts.md` for paste-and-run. Outcomes will be appended below once the user reports back.
+### Critical bug surfaced and fixed
 
-### Scripts staged
+When Step 2.2 returned `TOTAL: 0` despite `--reinstall` reporting success, diagnostic queries revealed the v1 build referenced `sys_scope.name` to identify the scope. In ServiceNow's `sys_scope` table:
 
-The handoff document walks through five steps:
+- `sys_scope.name` is the **display name** (`"nowisor Instance Scan Pack"`)
+- `sys_scope.scope` is the **scope identifier** (`"x_nowisor_isp"`)
 
-1. **Pre-state capture + clean** — captures any existing nowisor suite, deletes it for a true idempotency test
-2. **Post-install check counts** — confirms `now-sdk install --reinstall` deployed all 26 checks across 4 tables (expected: 16/1/8/1 = 26)
-3. **Bootstrap first run** — paste `bootstrap/install-suite.js`, expect `added 26, already-linked 0`
-4. **Bootstrap second run (idempotency)** — paste same script, expect `added 0, already-linked 26`
-5. **Smoke test** — trigger suite scan, confirm 26 execution records with zero or near-zero errors
+The bootstrap script was effectively asking "show me checks whose scope has the display name `x_nowisor_isp`" — which always returns zero. This bug would have made `bootstrap/install-suite.js` fail with `Found 0 active nowisor checks` on every customer install, *and* would have made the production `meta-active-check-coverage` check fire a false-positive finding on every scan.
 
-### Expected outcomes block (to be filled in after user reports)
+**Fix applied across 5 files** (commit `<pending>` on `verification/tier1`):
+- `bootstrap/install-suite.js:77` — `sys_scope.name` → `sys_scope.scope`
+- `scripts/check-meta-active-check-coverage.js:23` — same fix (production check would always misfire)
+- `src/fluent/scan-checks/meta-active-check-coverage.now.ts:12` — description text
+- `README.md` lines 88 + 139 — customer-facing query examples for finding retrieval
+- `verification/tier1-v2-scripts.md` lines 70 + 175 — verification scripts
 
+Pack rebuilt cleanly (`npx now-sdk build`). Reinstalled. All subsequent steps used the fixed scripts.
+
+### Step-by-step outcomes (post-fix)
+
+**Step 2.1 — pre-state capture + clean:**
 ```
-Step 2.1 outcome: [PENDING]
-Step 2.2 totals: [PENDING]
-Step 2.3 bootstrap first-run output: [PENDING]
-Step 2.4 bootstrap second-run output: [PENDING]
-Step 2.5 smoke test: executed N, errors M: [PENDING]
-
-Idempotency criteria check:
-- added 0 on second run: [ ]
-- already-linked 26 on second run: [ ]
-- errors 0 on both runs: [ ]
-- m2m row count unchanged: [ ]
-- suite sys_id unchanged: [ ]
+=== Step 2.1: pre-state capture ===
+Existing suite found: 0dff1c9183f803100fe45950ceaad3fc
+  Created: 2026-05-10 19:31:23
+  m2m rows: 3
+  m2m rows deleted
+  suite deleted — clean state for verification
 ```
+(The 3-row state is the v0.2 pilot deployment — matches v0.2 retrospective.)
+
+**Step 2.2 — post-install check counts:**
+```
+scan_script_only_check: 16
+scan_table_check: 1
+scan_linter_check: 8
+scan_column_type_check: 1
+TOTAL: 26
+```
+Matches expected type allocation (16/1/8/1 = 26).
+
+**Step 2.3 — bootstrap first run:**
+```
+=== nowisor suite bootstrap (v1.0.0) ===
+Created suite: c7348035833807100fe45950ceaad38a
+Found 26 active nowisor checks across all check tables
+Membership: added 26, already-linked 0, errors 0
+Bootstrap complete.
+```
+Post-state: suite sys_id `c7348035833807100fe45950ceaad38a`, m2m rows: 26. Clean.
+
+**Step 2.4 — bootstrap second run (idempotency):**
+```
+=== nowisor suite bootstrap (v1.0.0) ===
+Found existing suite: c7348035833807100fe45950ceaad38a
+Found 26 active nowisor checks across all check tables
+Membership: added 0, already-linked 26, errors 0
+Bootstrap complete.
+```
+
+All idempotency criteria met:
+- added 0 on second run ✓
+- already-linked 26 on second run ✓
+- errors 0 on both runs ✓
+- m2m row count unchanged (26) ✓
+- suite sys_id unchanged (`c7348035833807100fe45950ceaad38a`) ✓
+
+**Step 2.5 — smoke test (full suite scan):**
+```
+Recent nowisor executions: 26
+Executed cleanly: 26 | Errors: 0
+```
+All 26 checks executed without runtime errors. No cross-scope permission denied. No script syntax errors. No missing parameters. The 17 CrossScopePrivilege grants are operationally correct.
+
+This is a Tier 1 smoke pass only — it confirms checks execute, not that each finding's *content* is correct. Tier 2 verification (per-check finding content validation + LinterCheck planted-artifact testing) is the next sprint.
 
 ---
 
@@ -178,14 +225,15 @@ The CI workflow at `nowisor/instance-scan-pack/.github/workflows/` is operationa
 
 Recommended: option (1) when ready to enable CI for the agent pack on every monorepo push. Until then, defer.
 
-### Decision B — Tag application timing
+### Decision B — Tag commit selection
 
-Per sprint plan: tag `v1.0.0-build` applied "to the resulting commit" if all three verifications pass. V1 and V3 pass; V2 is pending user execution. Two paths:
+All three verifications pass. Tag `v1.0.0-build` is ready to apply, but the commit selection matters:
 
-1. **Wait for V2 completion** — apply tag once user reports V2 outcomes and they're clean.
-2. **Apply tag now if V2 expected to pass** — risky if V2 surfaces a real bootstrap issue.
+1. **Tag `492b211` (master, pre-fix)** — preserves "v1.0.0-build as originally built" semantics, but ships a known bootstrap bug. Not recommended.
+2. **Tag a commit on `verification/tier1` (post-fix)** — ships the working bootstrap. Branch fate (Decision C) determines whether this lands on master.
+3. **Merge `verification/tier1` to master first, then tag on master** — cleanest. `v1.0.0-build` points to a commit reachable from master that contains both the build and the verified fix.
 
-Recommended: option (1). The bootstrap script has not yet been validated against the v1.0.0 build artifact on a real instance — `--reinstall` reliability and check-count expectations could surface anomalies that warrant a fix before tagging.
+Recommended: option (3) once Decision C is resolved.
 
 ### Decision C — verification/tier1 branch fate
 
@@ -201,11 +249,11 @@ Recommended: option (3) once V2 is done. Cleanest separation of concerns.
 
 ## Next steps (in order)
 
-1. User runs `verification/tier1-v2-scripts.md` against dev265484, reports outcomes.
-2. Claude fills in V2 outcome block above. If clean, V2 marked PASS.
-3. User makes Decisions A, B, C above.
-4. If V2 passes and decision B is "apply tag": Claude tags `v1.0.0-build` on the agreed commit.
-5. Tier 2 verification (per-check finding content validation, LinterCheck planted-artifact testing) becomes the next sprint.
+1. ~~User runs V2 scripts on dev265484~~ — done, all clean.
+2. ~~Claude fills in V2 outcomes~~ — done above.
+3. **User makes Decisions A and C above** (A: workflow location; C: branch fate).
+4. **Claude applies `v1.0.0-build` tag** on the commit per Decision B + C resolution.
+5. **Tier 2 verification** (per-check finding content validation, LinterCheck planted-artifact testing) becomes the next sprint.
 
 ---
 

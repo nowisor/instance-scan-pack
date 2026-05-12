@@ -20,7 +20,7 @@
 
     for (var t = 0; t < tables.length; t++) {
         var gr = new GlideRecord(tables[t])
-        gr.addQuery('sys_scope.name', SCOPE_NAME)
+        gr.addQuery('sys_scope.scope', SCOPE_NAME)
         gr.addQuery('active', true)
         gr.query()
         while (gr.next()) {
