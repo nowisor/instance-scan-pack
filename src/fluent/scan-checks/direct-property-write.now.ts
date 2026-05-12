@@ -1,9 +1,24 @@
 import { LinterCheck } from '@servicenow/sdk/core'
 
+// DEFERRED TO v1.1 (Tier 2 verification, 2026-05-12):
+// Planted-artifact validation on dev265484 produced zero findings against
+// `new GlideRecord('sys_properties')`. The predicate looks for a LITERAL
+// node with value 'sys_properties' under a NEW/CALL ancestor. Either the
+// LITERAL.getValue() API is unavailable / returns a different shape than
+// expected, OR the AST representation of GlideRecord constructor argument
+// chains differs from the parent-walking assumption.
+//
+// v1.1 reactivation criteria: investigate the AST shape of
+// `new GlideRecord('sys_properties').update()` on dev265484 — possibly via
+// a diagnostic LinterCheck that dumps node types around table-name
+// literals. The detection model may need to anchor on the CALL of
+// .update() / .insert() / .deleteRecord() on a GlideRecord whose first
+// constructor arg is 'sys_properties', rather than the literal alone.
+// Confirm via planted-artifact verification before re-activation.
 export const directPropertyWriteCheck = LinterCheck({
     $id: Now.ID['nowisor-direct-property-write'],
     name: 'Direct sys_properties Write Detector',
-    active: true,
+    active: false,
     category: 'security',
     priority: '2',
     shortDescription:

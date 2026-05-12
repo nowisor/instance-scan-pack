@@ -2,21 +2,31 @@
 // AST visitor for server-side scripts. Reports line numbers of setWorkflow(false).
 //
 // Reference: AP-007 attack pattern (nowisor KB) — setWorkflow(false) disables Business
-// Rules, audit, and notifications for the subsequent write. Combined with eval() in
-// Script Includes it enables privilege escalation outside audit observation.
+// Rules, audit, and notifications for the subsequent write.
 //
-// AST predicate: NAME node whose identifier is 'setWorkflow' AND whose parent is a CALL.
-// We accept any first argument value (literal false, variable, expression) — the audit
-// surface is the call itself; argument-value narrowing would create false-negatives when
-// the argument is a variable or computed expression that resolves to false at runtime.
+// AST PATTERN (Tier 2 fix, 2026-05-12): function call vs method call shape
 //
-// API-uncertainty note: the LinterCheck AST verified surface (getTypeName, getNameIdentifier,
-// getParent, getLineNo) does not include a documented child-access method for CALL nodes.
-// A stricter predicate — "first argument is literal false" — would require getChildren()
-// or argument iteration that is not in the verified API. We implement the broader predicate
-// (any setWorkflow call) and treat true-arg calls as advisory rather than excluded. To verify
-// argument-value narrowing post-authoring: plant a Script Include with setWorkflow(false) and
-// setWorkflow(true) on dev265484; if only the false call should fire, refine here.
+// Direct function call — `eval('1+1')`:
+//     CALL
+//     ├── NAME 'eval'      ← parent IS CALL
+//     └── LITERAL '1+1'
+//
+// Method call — `gr.setWorkflow(false)`:
+//     CALL
+//     ├── GETPROP / PROPERTY / MEMBER_ACCESS
+//     │   ├── NAME 'gr'
+//     │   └── NAME 'setWorkflow'  ← parent is GETPROP, GRANDPARENT is CALL
+//     └── LITERAL false
+//
+// The v1.0.0-build version checked only `parent.getTypeName() === 'CALL'` which works for
+// function-call patterns (eval, GlideEvaluator construction) but misses method-call patterns
+// (any obj.method(args) shape). Tier 2 planted-artifact verification on dev265484
+// (`gr.setWorkflow(false)`) produced zero findings — confirmed by walking the AST manually.
+//
+// The fixed predicate accepts both shapes: NAME 'setWorkflow' AND (parent is CALL OR
+// grandparent is CALL). False-positive risk: someone has a property literally named
+// `setWorkflow` accessed as `obj.setWorkflow` (not invoked) — very unlikely on the
+// ServiceNow surface.
 //
 // Schema: v1 (finding emits ---NOWISOR_METADATA--- block parsed by advisor)
 // ES5-only (Instance Scan runtime constraint)
@@ -26,13 +36,22 @@
     engine.rootNode.visit(function (node) {
         if (!node) return
         if (
-            node.getTypeName() === 'NAME' &&
-            node.getNameIdentifier() === 'setWorkflow'
+            node.getTypeName() !== 'NAME' ||
+            node.getNameIdentifier() !== 'setWorkflow'
         ) {
-            var parent = node.getParent()
-            if (parent && parent.getTypeName() === 'CALL') {
-                line_numbers.push(node.getLineNo() + 1)
-            }
+            return
+        }
+        var parent = node.getParent()
+        if (!parent) return
+        // Function-call shape: NAME directly under CALL
+        if (parent.getTypeName() === 'CALL') {
+            line_numbers.push(node.getLineNo() + 1)
+            return
+        }
+        // Method-call shape: NAME under GETPROP under CALL
+        var grandparent = parent.getParent()
+        if (grandparent && grandparent.getTypeName() === 'CALL') {
+            line_numbers.push(node.getLineNo() + 1)
         }
     })
 

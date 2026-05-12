@@ -5,13 +5,24 @@
 // input it becomes a privilege-escalation primitive. Inventory signal: every occurrence
 // warrants audit even when the role list looks static.
 //
-// AST predicate: NAME node whose identifier is 'setRoles' AND whose parent is a CALL.
-// Method-call resolution in this AST surface is "member-access NAME under CALL"; the
-// NAME-under-CALL pattern matches the canonical eval-usage detector predicate.
+// AST PATTERN (Tier 2 fix, 2026-05-12): function call vs method call shape
 //
-// API-uncertainty note: we do not narrow on the receiver identifier (e.g., gs.getUser()).
-// 'setRoles' is a sufficiently uncommon method name that name-only matching is acceptable;
-// false-positives from same-named methods in unrelated APIs would still warrant audit.
+// setRoles is universally called as a method on a session/user receiver, e.g.,
+// `gs.getUser().setRoles('admin')`. AST shape:
+//     CALL
+//     ├── GETPROP / PROPERTY / MEMBER_ACCESS
+//     │   ├── (subexpression for gs.getUser())
+//     │   └── NAME 'setRoles'      ← parent is GETPROP, GRANDPARENT is CALL
+//     └── LITERAL 'admin'
+//
+// The v1.0.0-build predicate required `parent.getTypeName() === 'CALL'`, which is the
+// function-call shape (eval('1+1')) — never matches method-call shapes. Tier 2 planted-
+// artifact verification on dev265484 confirmed zero findings against
+// `gs.getUser().setRoles('admin')`.
+//
+// Fixed predicate: NAME 'setRoles' AND (parent CALL — defensive, in case of unusual call
+// shapes — OR grandparent CALL — the realistic method-call case). The shape-tolerant
+// predicate matches the eval-detector for function calls AND catches method calls.
 //
 // Schema: v1 (finding emits ---NOWISOR_METADATA--- block parsed by advisor)
 // ES5-only (Instance Scan runtime constraint)
@@ -21,13 +32,22 @@
     engine.rootNode.visit(function (node) {
         if (!node) return
         if (
-            node.getTypeName() === 'NAME' &&
-            node.getNameIdentifier() === 'setRoles'
+            node.getTypeName() !== 'NAME' ||
+            node.getNameIdentifier() !== 'setRoles'
         ) {
-            var parent = node.getParent()
-            if (parent && parent.getTypeName() === 'CALL') {
-                line_numbers.push(node.getLineNo() + 1)
-            }
+            return
+        }
+        var parent = node.getParent()
+        if (!parent) return
+        // Function-call shape
+        if (parent.getTypeName() === 'CALL') {
+            line_numbers.push(node.getLineNo() + 1)
+            return
+        }
+        // Method-call shape: NAME under GETPROP under CALL
+        var grandparent = parent.getParent()
+        if (grandparent && grandparent.getTypeName() === 'CALL') {
+            line_numbers.push(node.getLineNo() + 1)
         }
     })
 

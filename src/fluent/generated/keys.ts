@@ -70,8 +70,8 @@ declare global {
                         id: '0122be86cbdf4fda8fcce5ba95251a54'
                     }
                     'nowisor-inactive-users-with-roles': {
-                        table: 'scan_table_check'
-                        id: '57a22d7045624b889783a33f89d4fb0c'
+                        table: 'scan_script_only_check'
+                        id: 'd4c86b7e103144cc86334cc4d0a01055'
                     }
                     'nowisor-meta-active-check-coverage': {
                         table: 'scan_script_only_check'

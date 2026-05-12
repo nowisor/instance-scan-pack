@@ -170,7 +170,7 @@
     {
       "id": "nowisor-inactive-users-with-roles",
       "version": "1.0.0",
-      "type": "TableCheck",
+      "type": "ScriptOnlyCheck",
       "category": "security",
       "priority": 2,
       "name": "Inactive Users Retaining Roles",
@@ -180,7 +180,7 @@
         "iso27001": ["A.5.18"]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_user"],
+      "global_scope_tables_read": ["sys_user", "sys_user_has_role"],
       "active": true
     },
     {
@@ -345,7 +345,9 @@
       },
       "attack_path_refs": [],
       "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
-      "active": true
+      "active": false,
+      "deferred_to": "v1.1",
+      "deferred_reason": "Tier 2 planted-artifact validation produced zero findings: predicate regex-matches LITERAL node value, but AST splits 'var password = ...' into NAME + OP + LITERAL nodes — LITERAL value alone never contains the labelled-assignment shape. v1.1 reactivation: rewrite predicate to combine NAME (identifier matching password/api_key/secret/token) with adjacent LITERAL value, OR adopt engine.getSource() regex if API proves stable."
     },
     {
       "id": "nowisor-direct-property-write",
@@ -361,7 +363,9 @@
       },
       "attack_path_refs": [],
       "global_scope_tables_read": ["sys_script_include", "sys_script"],
-      "active": true
+      "active": false,
+      "deferred_to": "v1.1",
+      "deferred_reason": "Tier 2 planted-artifact validation produced zero findings against `new GlideRecord('sys_properties')`. Either LITERAL.getValue() API behavior differs from assumption, or GlideRecord constructor argument AST shape needs different anchor (e.g., CALL of .update()/.insert() on GlideRecord whose first arg is 'sys_properties'). v1.1 reactivation: ship a diagnostic LinterCheck that dumps node-type tree around table-name literals, redesign predicate accordingly."
     },
     {
       "id": "nowisor-domain-separation-script-include",

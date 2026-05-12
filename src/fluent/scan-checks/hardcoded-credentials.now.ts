@@ -1,9 +1,22 @@
 import { LinterCheck } from '@servicenow/sdk/core'
 
+// DEFERRED TO v1.1 (Tier 2 verification, 2026-05-12):
+// Planted-artifact validation on dev265484 produced zero findings against
+// `var password = 'Pa$$w0rd123!'`. The predicate matches a regex like
+// `password\s*[:=]\s*['"]…['"]` against the LITERAL node's value, but the
+// AST splits this assignment into a NAME node ('password') + OP ('=') +
+// LITERAL ('Pa$$w0rd123!'). The LITERAL's getValue() returns just the
+// password string, which never matches the labelled-assignment regex.
+//
+// v1.1 reactivation criteria: rewrite the predicate to look for a NAME
+// node whose identifier matches /^(password|api_?key|secret|token)$/i
+// followed by an adjacent OP and LITERAL with a high-entropy string value,
+// OR adopt engine.getSource() regex scanning if that API proves stable.
+// Confirm via planted-artifact verification before re-activation.
 export const hardcodedCredentialsCheck = LinterCheck({
     $id: Now.ID['nowisor-hardcoded-credentials'],
     name: 'Hardcoded Credentials Detector',
-    active: true,
+    active: false,
     category: 'security',
     priority: '1',
     shortDescription:
