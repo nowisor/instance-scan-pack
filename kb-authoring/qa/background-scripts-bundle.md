@@ -244,14 +244,19 @@ Use this artifact to systematically test every verification Background Script on
 
     // Instance DS context (informational)
     gs.print('');
-    var domains = new GlideRecord('domain');
-    domains.addQuery('active', true);
-    domains.query();
-    gs.print('Instance domain count: ' + domains.getRowCount());
-    if (domains.getRowCount() <= 1) {
+    if (!GlideTableDescriptor.isValid('domain')) {
+        gs.print('Instance domain count: 0 (domain table absent, DS plugin not active)');
         gs.print('Findings are ADVISORY (DS not in active use)');
     } else {
-        gs.print('Findings are ACTIONABLE (DS in active use)');
+        var domains = new GlideRecord('domain');
+        domains.addQuery('active', true);
+        domains.query();
+        gs.print('Instance domain count: ' + domains.getRowCount());
+        if (domains.getRowCount() <= 1) {
+            gs.print('Findings are ADVISORY (DS not in active use)');
+        } else {
+            gs.print('Findings are ACTIONABLE (DS in active use)');
+        }
     }
 })();
 ```
@@ -783,40 +788,24 @@ Use this artifact to systematically test every verification Background Script on
 ## - [ ] `nowisor-session-timeout`
 
 ```javascript
-/*
- * Verify nowisor-session-timeout
- * Read-only, safe for production.
- * Confirms glide.ui.session_timeout is within the recommended baseline.
- */
+// Verify nowisor-session-timeout. Read-only, safe for production.
+// Confirms glide.ui.session_timeout is within the recommended baseline of 30 minutes.
 (function verifySessionTimeout() {
-    var SENTINEL = '__NOT_REGISTERED__';
-    var BASELINE_MIN = 30;
     var prop = 'glide.ui.session_timeout';
-    var value = gs.getProperty(prop, SENTINEL);
-
-    if (value === SENTINEL) {
-        gs.print('[FAIL] ' + prop + ' is NOT REGISTERED in sys_properties.');
-        gs.print('       Set the property to 30 (minutes).');
-        return;
-    }
+    var value = gs.getProperty(prop, 'NOT_SET');
     var n = parseInt(value, 10);
-    if (isNaN(n)) {
-        gs.print('[FAIL] ' + prop + ' = "' + value + '" is not numeric.');
-        gs.print('       Set the property to 30 (minutes).');
-        return;
+    gs.print('Property ' + prop + ' = ' + value);
+    if (value === 'NOT_SET') {
+        gs.print('[FAIL] Property is not registered. Set to 30.');
+    } else if (isNaN(n)) {
+        gs.print('[FAIL] Value is not numeric. Set to 30.');
+    } else if (n > 30) {
+        gs.print('[FAIL] Value of ' + n + ' exceeds baseline of 30 minutes.');
+    } else {
+        gs.print('[PASS] Value of ' + n + ' minutes is within baseline.');
     }
-    if (n > BASELINE_MIN) {
-        gs.print('[FAIL] ' + prop + ' = ' + n + ' min (exceeds baseline ' + BASELINE_MIN + ').');
-        gs.print('       Reduce to 30 or lower.');
-        return;
-    }
-    gs.print('[PASS] ' + prop + ' = ' + n + ' min. Within baseline.');
-
-    // Companion: guest + unauthorized session timeouts
-    gs.print('');
-    gs.print('Companion timeouts (informational):');
-    gs.print('  glide.guest.session_timeout = ' + gs.getProperty('glide.guest.session_timeout', SENTINEL) + '  (recommended ≤15)');
-    gs.print('  glide.unauthorized.session_timeout = ' + gs.getProperty('glide.unauthorized.session_timeout', SENTINEL) + '  (recommended ≤5)');
+    gs.print('Companion: glide.guest.session_timeout = ' + gs.getProperty('glide.guest.session_timeout', 'NOT_SET'));
+    gs.print('Companion: glide.unauthorized.session_timeout = ' + gs.getProperty('glide.unauthorized.session_timeout', 'NOT_SET'));
 })();
 ```
 
