@@ -8,6 +8,85 @@ Open-source ServiceNow security check pack that runs inside your instance and pr
 - **Verified against:** ServiceNow Zurich Patch 6 (dev265484). Australia Patch 2 install fails — see [Compatibility](#compatibility); v1.1 reactivation work.
 - **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 (only required if you build from source; the pre-built update set has no runtime SDK dependency)
 
+## Quickstart
+
+If you have a Zurich Patch 6 PDI with Node 20+ and ~15 minutes:
+
+```bash
+git clone https://github.com/nowisor/instance-scan-pack
+cd instance-scan-pack
+npm install
+npx @servicenow/sdk auth --add https://your-instance.service-now.com --type basic --alias your-alias
+npx @servicenow/sdk build
+npx @servicenow/sdk install --auth your-alias
+```
+
+Then in your instance:
+
+1. **System Definition → Scripts - Background** — paste [`bootstrap/install-suite.js`](./bootstrap/install-suite.js), click Run.
+2. **Instance Scan → Suite Scans** — open "nowisor Instance Scan Pack", click Execute Suite Scan.
+3. **scan_finding.list** filtered by `check.sys_scope.scope = x_nowisor_isp` — your findings.
+
+> ⚠ **Password caveat (F-005):** if your PDI's auto-generated admin password contains `/` or `%`, `npx @servicenow/sdk auth --add` will fail with "username or password invalid" even though the credentials are correct. Reset the password via the developer portal to one within `[A-Za-z0-9!=._-]` before configuring the alias. See [`docs/qa/pdi-install-verification.md`](docs/qa/pdi-install-verification.md) for the full diagnosis.
+
+Detailed installation with explanations is in [Installation](#installation) below.
+
+## What it finds
+
+26 checks across four categories. Five concrete examples for texture:
+
+| Example finding | Property / pattern | Frameworks | Severity |
+|---|---|---|---|
+| CSRF token enforcement disabled | `glide.security.use_csrf_token = false` | NIS2 21.2.a · ISO 27001 A.5.15 · DORA 9 | CRITICAL |
+| Attachment role unrestricted | `glide.attachment.role = public` (Zurich OOB default) | NIS2 21.2.h · ISO 27001 A.5.34 | HIGH |
+| Session idle timeout exceeds baseline | `glide.ui.session_timeout > 30` (Zurich OOB default is 90) | NIS2 21.2.j · ISO 27001 A.8.5 · DORA 9 | HIGH |
+| `eval()` in custom code | AST-detected `eval()` call in Script Includes, Business Rules, etc. | NIS2 21.2.d · ISO 27001 A.8.28 | HIGH |
+| OOB ACL modified in last 24h | Recently-modified out-of-the-box ACL (pre-attack signal) | NIS2 21.2.a · ISO 27001 A.8.3 | MEDIUM |
+
+The full check inventory is in [`manifest.json`](./manifest.json). Every check has a customer-facing documentation page at `nowisor.com/kb/checks/<check-id>` covering the attack-path narrative, regulatory mapping, remediation steps, and a verification Background Script.
+
+## What runs where, what's sent where
+
+- **The pack runs inside your ServiceNow instance.** It installs as a scoped application (`x_nowisor_isp`) and writes findings to your `scan_finding` table.
+- **No outbound traffic.** The pack does not phone home, does not send findings anywhere, and does not require outbound network access from your instance to function. Findings live in your instance and are visible to users with read access to `scan_finding`.
+- **Optional advisor integration is opt-in.** If you choose to connect your instance to the [nowisor advisor](https://nowisor.com) (the paid SaaS at the higher tiers of that product), the advisor reads your `scan_finding` records via an authenticated OAuth grant you authorize. That data flow is opt-in, scoped to the OAuth grant, documented in the advisor's terms of service. The agent itself remains independent of it.
+- **The agent is standalone-useful.** You can install this pack, run scans, and read findings without ever connecting to nowisor.com. The advisor is the value-add; the detection is the floor.
+
+See [`SECURITY.md`](./SECURITY.md) for the responsible-disclosure policy and the full scope of what this project commits to.
+
+## Sample finding output
+
+Every finding has a human-readable summary followed by a structured `---NOWISOR_METADATA---` JSON block. Here's what a typical CSRF finding looks like in the `scan_finding` table:
+
+```
+CSRF token enforcement is disabled. The platform does not validate CSRF tokens on
+state-changing requests, exposing authenticated sessions to cross-site request forgery.
+
+Current value: false. Expected: true.
+
+---NOWISOR_METADATA---
+{
+  "nowisor_check_id": "nowisor-csrf-token-enforcement",
+  "nowisor_check_version": "1.0.0",
+  "nowisor_finding_schema": "v1",
+  "framework_mappings": {
+    "nis2": ["21.2.a"],
+    "iso27001": ["A.5.15"],
+    "dora": ["9"]
+  },
+  "evidence": {
+    "property_name": "glide.security.use_csrf_token",
+    "expected_value": "true",
+    "actual_value": "false"
+  },
+  "severity": 1,
+  "remediation_id": "csrf-001",
+  "attack_path_refs": ["AP-002"]
+}
+```
+
+The metadata block is the open schema any consumer can parse — the nowisor advisor at nowisor.com is one consumer, but you can build your own (export to SIEM, automate ticket creation, feed into a custom dashboard). See [Reading findings](#reading-findings) for the GlideRecord-based parsing pattern.
+
 ## What this is
 
 The nowisor agent is the open-source sensor surface of the nowisor product. It runs as a scoped application (`x_nowisor_isp`) inside your ServiceNow instance. Each scan execution produces `scan_finding` records, each finding carrying both a human-readable description and a structured `---NOWISOR_METADATA---` JSON block parseable by external tooling — primarily the nowisor advisor at nowisor.com, but the schema is open and any consumer can parse it.
@@ -110,34 +189,7 @@ Findings appear as records in the `scan_finding` table. Each finding has two lay
 1. **Human-readable description** at the top of `finding_details`
 2. **Structured metadata** below a `---NOWISOR_METADATA---` separator
 
-Example finding text:
-
-```
-CSRF token enforcement is disabled. The platform does not validate CSRF tokens on
-state-changing requests, exposing authenticated sessions to cross-site request forgery.
-
-Current value: false. Expected: true.
-
----NOWISOR_METADATA---
-{
-  "nowisor_check_id": "nowisor-csrf-token-enforcement",
-  "nowisor_check_version": "1.0.0",
-  "nowisor_finding_schema": "v1",
-  "framework_mappings": {
-    "nis2": ["21.2.a"],
-    "iso27001": ["A.5.15"],
-    "dora": ["9"]
-  },
-  "evidence": {
-    "property_name": "glide.security.use_csrf_token",
-    "expected_value": "true",
-    "actual_value": "false"
-  },
-  "severity": 1,
-  "remediation_id": "csrf-001",
-  "attack_path_refs": ["AP-002"]
-}
-```
+A complete sample finding is shown in [Sample finding output](#sample-finding-output) above. The metadata block is stable schema v1; the parsing pattern below extracts it programmatically.
 
 To parse all nowisor findings programmatically:
 
