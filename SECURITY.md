@@ -16,7 +16,7 @@ We aim to acknowledge security reports within 5 business days and to ship a fix 
 
 Some of the checks in this pack target ServiceNow platform properties whose misconfiguration creates real security exposure. The checks themselves describe well-known hardening patterns: the property names, default values, and recommended values are all documented on docs.servicenow.com and on the platform's own Instance Security Center.
 
-If we discover, during the course of authoring or maintaining a check, a security issue in the ServiceNow platform itself that has not been publicly disclosed — for example, an undocumented vulnerability surfaced by a detection technique — we coordinate disclosure with [ServiceNow PSIRT](https://www.servicenow.com/company/trust/security/security-vulnerabilities.html) before publishing.
+If we discover, during the course of authoring or maintaining a check, a security issue in the ServiceNow platform itself that has not been publicly disclosed — for example, an undocumented vulnerability surfaced by a detection technique — we coordinate disclosure with ServiceNow PSIRT via their [Coordinated Vulnerability Disclosure program](https://securitylab.servicenow.com/cvd) (`disclosure@servicenow.com`) before publishing.
 
 In practice this means:
 
@@ -43,7 +43,7 @@ In scope:
 Out of scope:
 
 - Misconfigurations in the customer's instance unrelated to the pack itself (those are what the pack detects).
-- Issues in `@servicenow/sdk`, ServiceNow plugins, or the ServiceNow platform — please report those directly to ServiceNow PSIRT.
+- Issues in `@servicenow/sdk`, ServiceNow plugins, or the ServiceNow platform — please report those directly to [ServiceNow PSIRT](https://securitylab.servicenow.com/cvd).
 - Findings that the pack is *intended* to surface (false-positive disagreements are filed as regular issues, not security reports).
 
 ## Supported releases
