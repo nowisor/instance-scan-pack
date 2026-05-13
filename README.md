@@ -82,7 +82,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see 26 nowisor checks under the `x_nowisor_isp` scope — 24 active and 2 deferred (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see 26 nowisor checks under the `x_nowisor_isp` scope — 24 active and 2 deferred (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per [`docs/retrospectives/V1_RETROSPECTIVE_TIER2.md`](docs/retrospectives/V1_RETROSPECTIVE_TIER2.md)).
 
 ## Running scans
 
@@ -248,7 +248,7 @@ The 17 `CrossScopePrivilege` records ship with the pack so it functions correctl
 
 - **Issues / proposed checks:** [github.com/nowisor-com/instance-scan-agent/issues](https://github.com/nowisor-com/instance-scan-agent/issues) (replace with your fork URL if not from upstream)
 - **Property-name verification rule:** every `glide.*` property referenced must exist on a verified PDI. The pack ships with a verified baseline at `nowisor/verified_schema/releases/zurich/properties/all_properties_zurich_patch6.json` (3,585 properties). Pull requests that reference unverified property names will not be merged.
-- **AST predicate verification:** every LinterCheck predicate must be verified against a planted test artifact before the check is enabled. Pilot procedure documented in `V0_2_RETROSPECTIVE.md`.
+- **AST predicate verification:** every LinterCheck predicate must be verified against a planted test artifact before the check is enabled. Pilot procedure documented in [`docs/retrospectives/V0_2_RETROSPECTIVE.md`](docs/retrospectives/V0_2_RETROSPECTIVE.md).
 
 ## License
 

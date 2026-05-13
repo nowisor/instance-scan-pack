@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-12
 **Target instance:** test-instance-A (Zurich Patch 6 PDI; the v1.0.0-build verification instance)
-**Bundle source:** `kb-authoring/qa/background-scripts-bundle.md`
+**Bundle source:** [`background-scripts-bundle.md`](./background-scripts-bundle.md)
 **Tester:** project maintainer
 
 > Instance state details in this document — user counts, admin counts, property values, finding volumes — have been generalized to order-of-magnitude / qualitative descriptions. Specific counts and identifiers were redacted before public release because the test instance is a personal ServiceNow Personal Developer Instance, not customer state. The methodology, fix discipline, and decision narrative are preserved verbatim because that is what is portable to other instances.
@@ -33,7 +33,7 @@
 ## Classification rubric
 
 - **PASS** — output matches the KB page's verification narrative, customer would understand the result without further explanation.
-- **PASS-WITH-NOTE** — script runs without error and the output is semantically correct, but presentation, narrative, or missing context could be improved. Logged to `BACKLOG.md` as a v1.1 improvement candidate.
+- **PASS-WITH-NOTE** — script runs without error and the output is semantically correct, but presentation, narrative, or missing context could be improved. Logged as a v1.1 improvement candidate (see the PASS-WITH-NOTE backlog section at the bottom of this document).
 - **FAIL** — syntax error, broken query, missing identifier, output that misrepresents instance state, or output that contradicts the KB page's description. Fixed in-pass for the v1.0.0 ship.
 
 ## Per-script results
@@ -337,9 +337,9 @@ Sample of 1,000 sys_update_xml records:
 3. Third failure (plain prose, test-instance-C): line number shifted 33 → 32 (confirming editor was loading the fresh script), still failed → strongly suggested test-instance-C's paste pipeline corrupts ASCII apostrophes too (smart-quote substitution at OS/browser layer).
 4. Diagnostic on test-instance-A (`gs.print('hello');`): PASSED → test-instance-A's paste pipeline is clean. The original error class was test-instance-C-specific.
 **Resolution:** The prose-rewrite is kept as defense-in-depth even though test-instance-A doesn't need it. The class of hazard (operator chars / non-ASCII in printed strings) was real on at least one ServiceNow paste pipeline; eliminating it costs nothing and prevents future variance.
-**Fix:** Companion-property output lines in the customer-facing `nowisor-session-timeout` KB page and the mirrored entry in `kb-authoring/qa/background-scripts-bundle.md` rewritten to plain prose ("recommended max 15 minutes" / "recommended max 5 minutes"). Four substitutions total.
+**Fix:** Companion-property output lines in the customer-facing `nowisor-session-timeout` KB page and the mirrored entry in [`background-scripts-bundle.md`](./background-scripts-bundle.md) rewritten to plain prose ("recommended max 15 minutes" / "recommended max 5 minutes"). Four substitutions total.
 **Audit:** All 24 scripts in bundle + 26 KB pages scanned for non-ASCII bytes inside JS string literals — zero remaining (em-dashes in `//` comments left untouched, they do not break compilation).
-**Defensive rule for v1.1 publishing (logged to BACKLOG):** verification-script printed output should use prose, not operator symbols or non-ASCII, because ServiceNow paste pipelines vary across instance variants.
+**Defensive rule for v1.1 publishing:** verification-script printed output should use prose, not operator symbols or non-ASCII, because ServiceNow paste pipelines vary across instance variants.
 **Commit:** to follow in Item 1.3.
 
 ### F-002 — `nowisor-domain-separation-script-include`: `GlideRecord('domain')` on instance without domain-separation plugin
@@ -352,7 +352,7 @@ Sample of 1,000 sys_update_xml records:
 
 ## PASS-WITH-NOTE backlog entries
 
-> For each PASS-WITH-NOTE: capture what could be improved in the output narrative or script structure. These are logged to `BACKLOG.md` as v1.1 improvement candidates — they do not block ship.
+> For each PASS-WITH-NOTE: capture what could be improved in the output narrative or script structure. These are v1.1 improvement candidates — they do not block ship.
 
 ### N-001 — `nowisor-mfa-enforcement`: catch-branch wording on missing `sys_user_mfa_setup` table
 **Symptom:** When the table is inaccessible (most likely because the MFA plugin isn't active on the instance), the script's catch branch prints `(sys_user_mfa_setup table not accessible in this scope)`. The wording implies a scope-isolation problem, but the more common cause is "plugin not active".
