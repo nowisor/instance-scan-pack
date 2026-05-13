@@ -82,7 +82,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see 26 active nowisor checks under the `x_nowisor_isp` scope.
+Navigate to **System Definition → Scan → Scan Checks**. You should see 26 nowisor checks under the `x_nowisor_isp` scope — 24 active and 2 deferred (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 

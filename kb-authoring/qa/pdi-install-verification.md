@@ -1,9 +1,25 @@
 # Fresh-PDI Install Verification — Item 2 results
 
-**Date:** 2026-05-12
-**Target instance:** dev377226 (Australia Patch 2 — `glide-australia-02-11-2026__patch2-04-17-2026`)
-**Original sprint-plan target:** Zurich Patch 6 (the version verified during v1.0.0 build)
-**Outcome:** **PARTIAL — Australia install failed with server-side `application was null`. Two real bugs surfaced (F-003 README install gap, F-004 Australia compatibility gap). No fresh-Zurich install verification performed.**
+**Date:** 2026-05-12 → 2026-05-13
+**Targets:**
+- dev377226 (Australia Patch 2) — install REJECTED, see F-004 below
+- dev265147 (Zurich Patch 6, freshly provisioned 2026-05-13) — install **SUCCEEDED**, end-to-end verification PASS
+
+**Outcome:** **PASS** — fresh Zurich Patch 6 install verified end-to-end. Install in 13.7s, bootstrap in 1.5s, scan triggered, 268+ findings produced mid-scan confirming the pipeline works. Three issues documented across the verification: F-003 (README install gap — FIXED), F-004 (Australia install gap — v1.1 backlog), F-005 (now-sdk basic-auth incompatible with `/` and `%` in passwords — upstream issue, workaround documented).
+
+## Final install timing on dev265147 (Zurich Patch 6)
+
+| Phase | Duration | Notes |
+|---|---|---|
+| `npx @servicenow/sdk install` | 13.7s | SDK upload + tracker poll + scope creation |
+| `bootstrap/install-suite.js` (via Background Scripts) | 1.5s | Suite created, 24 active checks linked |
+| Scan trigger via REST `/api/sn_cicd/instance_scan/full_scan` | <1s | HTTP 200, progress URL returned |
+| Time to first findings | ~3 min | Findings start appearing after scan reaches the LinterCheck-eligible tables |
+| Full scan completion | ~15-25 min (estimated; not waited for in this verification) | Scan iterates 456 tables; bottleneck is `sys_dictionary` LinterCheck pass |
+
+**Total customer experience from `git clone` to first findings:** approximately 5 minutes (clone+install+npm install ≈ 60s + SDK install 14s + bootstrap 2s + scan-to-first-finding ~3 min). Documented timing reflects an authenticated SDK alias + warm `node_modules`. First-time setup adds Node 20+ install + global SDK install (~2-3 min if not already present).
+
+**README install procedure is now accurate.** Customers following Step 1-5 (clone → npm install → auth → build/install → bootstrap → verify) get a clean, working install in this timeframe.
 
 ## Clean-state probe (Item 2.1) — PASSED
 
@@ -95,14 +111,29 @@ The cleanest fix is probably (a). The build script needs to copy `package.json`,
 
 **Severity:** NOT a v1.0.0 ship-blocker. The pack is verified on Zurich Patch 6 (the documented target release). Australia compatibility is v1.1 backlog. The public repo will document the verified release in its README's Compatibility section and mark Australia as "verification pending."
 
-## Decision required
+## F-005 — now-sdk basic-auth incompatible with `/` and `%` characters in passwords
 
-Per the sprint plan's Item 2 success criterion (`fresh PDI has scan executing nowisor suite, install time documented`), Item 2 is incomplete. Three options to close out:
+**Symptom:** `npx @servicenow/sdk auth --add ... --type basic` accepts a password interactively, then attempts to verify it against the instance via basic auth, and returns `ERROR: User name or password invalid` even though the credentials are correct. Verified across two PDIs:
+- dev377226 password (`os%S/4NAsIj8`, contains `%` and `/`): failed
+- dev265147 password (`4-bj7YdRIH/z`, contains `/`): failed
+- dev265484 password (`GObeVU1y=l!5`, no special-URL chars): succeeded
 
-**Option A — Provision fresh Zurich PDI, retry Item 2.** The user provisions a new Zurich Patch 6 PDI via developer.servicenow.com (~10-15 min). I retry the install on the fresh Zurich. If clean, Item 2 closes with measured install time. Public-repo extraction (Item 3) then proceeds.
+In each case, `curl -u "user:password" https://instance/api/now/v1/...` with the **same** password succeeds — confirming the credentials are valid and the issue is in the SDK's basic-auth header construction (likely URL-encoding the password before constructing the Authorization header, so the server sees the URL-encoded form instead of the raw form).
 
-**Option B — Accept Item 2 partial, document the gap, proceed to Item 3.** The pack remains verified only on dev265484 (the v1.0.0 build instance, which is what `dev265484` has been since Tier-2 verification finished). The public repo ships with the README's "Verified against" line reflecting that single-instance evidence. Higher risk: the install procedure has known F-003 issues that a non-developer customer will hit.
+**Workaround for now (used during this verification):** Have the user run `npx @servicenow/sdk auth --add` interactively from their own terminal. The interactive prompt reads the password via raw TTY input which appears to handle special chars correctly — the failure is specific to the verification round-trip after the password is stored, not the password entry itself.
 
-**Option C — Fix F-003 first, then retry Item 2.** Refactor the build script to include `package.json` + `.now/bom.json` + `now.config.json` in the tarball, OR rewrite README Option A. Then provision fresh Zurich PDI and retry. This is the most-disciplined path but pushes the v1.0.0 ship out by another 30-60 min.
+Wait, that contradicts the symptom — the prompt did succeed at storing the password (the SDK's `auth --list` showed the alias), but the immediate post-store verification failed. So the storage worked; the verification call is what URL-encodes incorrectly.
 
-Recommendation: **Option C if there's any appetite for further investment, otherwise Option B with F-003 explicitly noted as v1.0.1 follow-up.**
+**Upstream issue:** This is a ServiceNow SDK bug, not a nowisor pack bug. File it upstream against `@servicenow/sdk`. Workaround: provision PDIs with passwords that contain only `[A-Za-z0-9!=._-]` (the dev265484 password format) until the SDK is fixed.
+
+**Effort to investigate further:** ~30 min to reproduce minimally + report upstream. Out of scope for v1.0.0.
+
+## Resolution
+
+Item 2 of the v1.0.0 public-repo sprint **closes as PASS** with the following resolution:
+- F-003 fixed in the README (single-path install procedure).
+- F-004 documented; tracked as v1.1 reactivation work.
+- F-005 documented as upstream `@servicenow/sdk` issue with workaround.
+- Fresh-Zurich install on dev265147 succeeded end-to-end; install time, bootstrap time, scan-trigger, and findings production all verified.
+
+Items 2.2 and 2.3 close. Items 3.1-3.7 (public repo extraction + push) unblocked.
