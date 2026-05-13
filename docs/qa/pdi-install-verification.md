@@ -5,7 +5,7 @@
 - test-instance-C (Australia Patch 2) — install REJECTED, see F-004 below
 - test-instance-B (Zurich Patch 6, freshly provisioned 2026-05-13) — install **SUCCEEDED**, end-to-end verification PASS
 
-**Outcome:** **PASS** — fresh Zurich Patch 6 install verified end-to-end. Install completed in well under a minute, bootstrap in seconds, scan triggered cleanly, hundreds of findings produced mid-scan confirming the pipeline works. Three issues documented across the verification: F-003 (README install gap — FIXED), F-004 (Australia install gap — v1.1 backlog), F-005 (now-sdk basic-auth incompatible with `/` and `%` in passwords — upstream issue, workaround documented).
+**Outcome:** **PASS** — fresh Zurich Patch 6 install verified end-to-end. Install completed in well under a minute, bootstrap in seconds, scan triggered cleanly, hundreds of findings produced mid-scan confirming the pipeline works. Three issues documented across the verification: F-003 (README install gap — FIXED), F-004 (Australia install gap — v1.1 backlog), F-005 (an interoperability issue we observed with `@servicenow/sdk` basic-auth handling for passwords containing `/` or `%` — workaround documented).
 
 ## Final install timing on test-instance-B (Zurich Patch 6)
 
@@ -111,29 +111,26 @@ The cleanest fix is probably (a). The build script needs to copy `package.json`,
 
 **Severity:** NOT a v1.0.0 ship-blocker. The pack is verified on Zurich Patch 6 (the documented target release). Australia compatibility is v1.1 backlog. The public repo will document the verified release in its README's Compatibility section and mark Australia as "verification pending."
 
-## F-005 — now-sdk basic-auth incompatible with `/` and `%` characters in passwords
+## F-005 — `@servicenow/sdk` basic-auth interoperability with `/` and `%` in passwords
 
-**Symptom:** `npx @servicenow/sdk auth --add ... --type basic` accepts a password interactively, then attempts to verify it against the instance via basic auth, and returns `ERROR: User name or password invalid` even though the credentials are correct. Verified across two PDIs:
-- test-instance-C password (random PDI-generated; contained both `%` and `/`): failed
-- test-instance-B password (random PDI-generated; contained `/`): failed
-- test-instance-A password (random PDI-generated; contained no URL-reserved characters): succeeded
+**Symptom we observed:** `npx @servicenow/sdk auth --add ... --type basic` accepts a password interactively, then attempts to verify it against the instance via basic auth, and returns `ERROR: User name or password invalid` even though the credentials are correct. Reproduced across two PDIs:
 
-In each case, `curl -u "user:password" https://instance/api/now/v1/...` with the **same** password succeeds — confirming the credentials are valid and the issue is in the SDK's basic-auth header construction (likely URL-encoding the password before constructing the Authorization header, so the server sees the URL-encoded form instead of the raw form).
+- A PDI with an auto-generated admin password containing both `%` and `/`: verification failed.
+- A PDI with an auto-generated admin password containing `/`: verification failed.
+- A PDI with an auto-generated admin password containing no URL-reserved characters: verification succeeded.
 
-**Workaround for now (used during this verification):** Have the user run `npx @servicenow/sdk auth --add` interactively from their own terminal. The interactive prompt reads the password via raw TTY input which appears to handle special chars correctly — the failure is specific to the verification round-trip after the password is stored, not the password entry itself.
+In every case, `curl -u "user:password" https://instance/api/now/v1/...` with the same password succeeds — confirming the credentials themselves are valid. Our working hypothesis is that the SDK URL-encodes the password before constructing the Authorization header, so the server receives the URL-encoded form rather than the raw form. We have not confirmed this by reading the SDK source.
 
-Wait, that contradicts the symptom — the prompt did succeed at storing the password (the SDK's `auth --list` showed the alias), but the immediate post-store verification failed. So the storage worked; the verification call is what URL-encodes incorrectly.
+**Workaround documented for customers:** If you receive a PDI whose auto-generated admin password contains `/` or `%`, reset it via the developer portal to one within `[A-Za-z0-9!=._-]` before configuring the SDK alias. The pack itself is not affected — this is an SDK-CLI authentication issue, not a runtime issue with the agent on the instance.
 
-**Upstream issue:** This is a ServiceNow SDK bug, not a nowisor pack bug. File it upstream against `@servicenow/sdk`. Workaround: if you receive a PDI whose auto-generated admin password contains `/` or `%`, reset it via the developer portal to one within `[A-Za-z0-9!=._-]` before configuring the SDK alias.
-
-**Effort to investigate further:** ~30 min to reproduce minimally + report upstream. Out of scope for v1.0.0.
+**Next step:** Reproduce minimally and open an issue against `@servicenow/sdk` so the SDK team can confirm or correct our hypothesis. Out of scope for v1.0.0.
 
 ## Resolution
 
 Item 2 of the v1.0.0 public-repo sprint **closes as PASS** with the following resolution:
 - F-003 fixed in the README (single-path install procedure).
 - F-004 documented; tracked as v1.1 reactivation work.
-- F-005 documented as upstream `@servicenow/sdk` issue with workaround.
+- F-005 documented as a `@servicenow/sdk` basic-auth interoperability observation with workaround; report to be filed with the SDK team.
 - Fresh-Zurich install on test-instance-B succeeded end-to-end; install time, bootstrap time, scan-trigger, and findings production all verified.
 
 Items 2.2 and 2.3 close. Items 3.1-3.7 (public repo extraction + push) unblocked.

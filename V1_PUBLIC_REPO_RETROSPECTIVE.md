@@ -50,7 +50,7 @@ The sprint plan called for a fresh Zurich Patch 6 PDI. Two instances were tried:
 
 **A third issue surfaced too:**
 
-- **F-005 — `now-sdk` basic-auth incompatible with `/` and `%` in passwords.** The SDK's `auth --add` command verifies credentials against the instance immediately after storing them. The verification call URL-encodes the password before constructing the Authorization header, so passwords containing `/` or `%` are double-encoded and rejected by the server. The same credentials work correctly via curl's basic auth. The bug was observed across two PDIs whose auto-generated admin passwords contained these characters. This is an upstream `@servicenow/sdk` issue, not a nowisor pack bug. Workaround documented: provision PDIs with passwords containing only `[A-Za-z0-9!=._-]`, or reset the password via the developer portal to one within that character class before configuring the SDK alias.
+- **F-005 — `@servicenow/sdk` basic-auth interoperability with `/` and `%` in passwords.** The SDK's `auth --add` command verifies credentials against the instance immediately after storing them, and the verification call returns "username or password invalid" when the password contains `/` or `%`. The same credentials work correctly via curl's basic auth, so the underlying issue appears to be in how the SDK constructs the Authorization header (working hypothesis: the password is being URL-encoded before the header is built, so the server sees a different value than the user typed). We observed this across two PDIs whose auto-generated admin passwords contained those characters. We will reproduce minimally and open a report with the SDK team. The agent itself is not affected — this is a CLI-side authentication issue, not a runtime issue. Workaround for customers: reset the PDI password via the developer portal to one within `[A-Za-z0-9!=._-]` before configuring the SDK alias.
 
 ## Item 3 — Public repo split
 
@@ -94,7 +94,7 @@ preserved retrospective files in this repository.
 - Reactivate `nowisor-hardcoded-credentials` (AST predicate redesign — current predicate matches LITERAL node values alone, but `var password = '...'` splits the assignment into NAME + OP + LITERAL nodes that the LITERAL alone never contains the labelled-assignment shape).
 - Reactivate `nowisor-direct-property-write` (AST anchor investigation — predicate produced zero findings against the planted test artifact in Tier 2 verification).
 - Investigate F-004 — Australia Patch 2 install rejection. Try the install with a newer `@servicenow/sdk` build; review ServiceNow's Fluent SDK changelog between Zurich and Australia; check for plugin-state differences between the two releases.
-- File F-005 upstream against `@servicenow/sdk` (basic-auth password URL-encoding bug).
+- Reproduce F-005 minimally and report to the `@servicenow/sdk` team (basic-auth password handling).
 - Apply N-001 (`mfa-enforcement` catch-branch wording), N-002 (set-workflow + glide-record-vs-secure OOB-vs-customer partition), N-003 (empty-source-display fallback) from the bundle test results.
 - Cookie cluster hardening: `glide.cookies.samesite` was found `NOT_REGISTERED` on the Zurich Patch 6 default; recommend the customer set this property.
 - Build a pure-XML or pure-UI install path so customers without local Node + the SDK can install without a developer workstation.
