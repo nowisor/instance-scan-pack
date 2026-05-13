@@ -288,11 +288,32 @@ The JSON should be valid JSON-parseable text after the `---NOWISOR_METADATA---` 
 
 ## Compatibility
 
-| Release | Verified | Status |
+### Verified targets
+
+| Release | Verified PDI | Status |
 |---|---|---|
 | Zurich Patch 6 | dev265484 | Fully verified — property baseline complete; 24/24 verification Background Scripts pass on a live instance |
 | Australia Patch 2 | dev377226 | **Install fails** — `sn_appclient_upload_processor.do` returns `application was null` on the v1.0.0 build. Root cause not yet investigated. Tracked as v1.1 reactivation work. |
 | Older releases (Yokohama, Xanadu, Washington DC) | not verified | Likely works but unverified; file an issue if you test |
+
+### Behavior on other releases and patches
+
+The pack ships a **verified property baseline** (`nowisor/verified_schema/releases/zurich/properties/all_properties_zurich_patch6.json`) that captures property names, types, and OOB values from Zurich Patch 6. On any other release or patch, four failure modes are possible — knowing which mode applies to which check lets you self-triage findings:
+
+| Failure mode | Affects | Resilience on patch drift (same release) | Resilience on release drift |
+|---|---|---|---|
+| **Property name renamed / removed** | Property checks | Stable within a release; very rare across patches | Possible — a property may be split, renamed, or absorbed into a plugin between releases |
+| **OOB default changed in a security patch** | Property checks that compare to OOB | Possible; this is exactly what hardening patches do | Common (e.g., `glide.ui.session_timeout` went from 90 in legacy releases to 30 in Zurich) |
+| **OOB ACL set changed** | `nowisor-oob-acl-modifications` (drift detection) | Likely — security patches routinely ship new/modified OOB ACLs | Certain — every release ships ACL changes |
+| **AST surface (tables scanned, plugin presence)** | LinterChecks | Stable | Possible — table moves, new scopes, plugin-gated tables |
+
+**Patch-resilient by design.** Property checks in this pack encode the *security expectation* (e.g., session timeout ≤ 30 minutes), not "differs from OOB default" — so a patch that changes the OOB default does not produce a false positive. AST-based LinterChecks operate on JavaScript syntax (`eval()`, `setWorkflow(false)`, etc.) and are stable across patches and releases for any check whose target tables still exist.
+
+**Patch-sensitive.** `nowisor-oob-acl-modifications` is the one check whose semantics depend directly on the OOB baseline. On an instance whose patch differs from the verified baseline, the check will flag patch-introduced ACL changes as drift. Treat these as informational on first scan and tune the comparison once you've reconciled the baseline.
+
+**v1.1 roadmap.** Per-release baselines at patch granularity under `nowisor/verified_schema/releases/<release>/<patch>/`, with runtime detection of the instance's release+patch via `glide.buildtag` so checks load the matching baseline. Until that lands, the pack assumes Zurich Patch 6 semantics for OOB comparisons and reports the running build at scan time so findings can be interpreted against the right baseline.
+
+### Cross-scope privilege records
 
 The 17 `CrossScopePrivilege` records ship with the pack so it functions correctly even in instances with strict scope isolation. The pack does not require admin elevation; the executing user needs read on `scan_finding`, `scan_check_*`, and the in-scope tables the audit checks touch (audit of sys_user, sys_security_acl, sys_script_include, etc.).
 
