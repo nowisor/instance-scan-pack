@@ -2,28 +2,28 @@
 
 **Date:** 2026-05-12 → 2026-05-13
 **Targets:**
-- dev377226 (Australia Patch 2) — install REJECTED, see F-004 below
-- dev265147 (Zurich Patch 6, freshly provisioned 2026-05-13) — install **SUCCEEDED**, end-to-end verification PASS
+- test-instance-C (Australia Patch 2) — install REJECTED, see F-004 below
+- test-instance-B (Zurich Patch 6, freshly provisioned 2026-05-13) — install **SUCCEEDED**, end-to-end verification PASS
 
-**Outcome:** **PASS** — fresh Zurich Patch 6 install verified end-to-end. Install in 13.7s, bootstrap in 1.5s, scan triggered, 268+ findings produced mid-scan confirming the pipeline works. Three issues documented across the verification: F-003 (README install gap — FIXED), F-004 (Australia install gap — v1.1 backlog), F-005 (now-sdk basic-auth incompatible with `/` and `%` in passwords — upstream issue, workaround documented).
+**Outcome:** **PASS** — fresh Zurich Patch 6 install verified end-to-end. Install completed in well under a minute, bootstrap in seconds, scan triggered cleanly, hundreds of findings produced mid-scan confirming the pipeline works. Three issues documented across the verification: F-003 (README install gap — FIXED), F-004 (Australia install gap — v1.1 backlog), F-005 (now-sdk basic-auth incompatible with `/` and `%` in passwords — upstream issue, workaround documented).
 
-## Final install timing on dev265147 (Zurich Patch 6)
+## Final install timing on test-instance-B (Zurich Patch 6)
 
 | Phase | Duration | Notes |
 |---|---|---|
-| `npx @servicenow/sdk install` | 13.7s | SDK upload + tracker poll + scope creation |
-| `bootstrap/install-suite.js` (via Background Scripts) | 1.5s | Suite created, 24 active checks linked |
-| Scan trigger via REST `/api/sn_cicd/instance_scan/full_scan` | <1s | HTTP 200, progress URL returned |
-| Time to first findings | ~3 min | Findings start appearing after scan reaches the LinterCheck-eligible tables |
-| Full scan completion | ~15-25 min (estimated; not waited for in this verification) | Scan iterates 456 tables; bottleneck is `sys_dictionary` LinterCheck pass |
+| `npx @servicenow/sdk install` | well under a minute | SDK upload + tracker poll + scope creation |
+| `bootstrap/install-suite.js` (via Background Scripts) | seconds | Suite created, 24 active checks linked |
+| Scan trigger via REST `/api/sn_cicd/instance_scan/full_scan` | sub-second | HTTP 200, progress URL returned |
+| Time to first findings | a few minutes | Findings start appearing after scan reaches the LinterCheck-eligible tables |
+| Full scan completion | tens of minutes | Scan iterates several hundred tables; bottleneck is the `sys_dictionary` LinterCheck pass |
 
-**Total customer experience from `git clone` to first findings:** approximately 5 minutes (clone+install+npm install ≈ 60s + SDK install 14s + bootstrap 2s + scan-to-first-finding ~3 min). Documented timing reflects an authenticated SDK alias + warm `node_modules`. First-time setup adds Node 20+ install + global SDK install (~2-3 min if not already present).
+**Total customer experience from `git clone` to first findings:** approximately 5 minutes (clone + `npm install` for ~60s + SDK install in under a minute + bootstrap in seconds + scan-to-first-finding in a few minutes). Documented timing reflects an authenticated SDK alias + warm `node_modules`. First-time setup adds Node 20+ install + global SDK install (~2-3 min if not already present).
 
 **README install procedure is now accurate.** Customers following Step 1-5 (clone → npm install → auth → build/install → bootstrap → verify) get a clean, working install in this timeframe.
 
 ## Clean-state probe (Item 2.1) — PASSED
 
-The clean-state Background Script confirmed dev377226 was effectively fresh for the install:
+The clean-state Background Script confirmed test-instance-C was effectively fresh for the install:
 
 ```
 nowisor scope (x_nowisor_isp): absent
@@ -35,24 +35,24 @@ Domain-separation safe-harbor property: NOT_SET
 domain table: not provisioned (DS plugin not active)
 ```
 
-The DOM-* workstream's "contamination" did not deploy because the DS plugin is paid-SKU-blocked — so dev377226 is effectively a fresh Australia PDI, just on a newer release than the sprint plan envisioned.
+The DOM-* workstream's "contamination" did not deploy because the DS plugin is paid-SKU-blocked — so test-instance-C is effectively a fresh Australia PDI, just on a newer release than the sprint plan envisioned.
 
 ## Install attempts (Item 2.2) — FAILED
 
 ### Attempt 1 — Install from extracted tarball
-**Command:** `npx @servicenow/sdk install --source /tmp/nowisor-install --auth dev377226-qa`
+**Command:** `npx @servicenow/sdk install --source /tmp/nowisor-install --auth test-instance-C-qa`
 **Result:** Failed at the first SDK validation step: `ERROR: Could not find package.json. Please ensure you are running command in the intended directory or specify source as an argument if applicable.`
 **Finding:** **F-003**.
 
 ### Attempt 2 — Install from source directory (build + install)
-**Commands:** `npx @servicenow/sdk build` (~13s, succeeded) → `npx @servicenow/sdk install --auth dev377226-qa --debug` (~8s, failed)
+**Commands:** `npx @servicenow/sdk build` (~13s, succeeded) → `npx @servicenow/sdk install --auth test-instance-C-qa --debug` (~8s, failed)
 **Result:**
-- The SDK successfully built the install zip at `target/nowisor_instance_scan_pack_1_0_0.zip` (71KB)
-- Uploaded zip to `/sn_appclient_upload_processor.do` on dev377226
+- The SDK successfully built the install zip at `target/nowisor_instance_scan_pack_1_0_0.zip` (a small zip — tens of KB)
+- Uploaded zip to `/sn_appclient_upload_processor.do` on test-instance-C
 - Server returned tracker state 3 (failed) with message: `Exception occurred while installing application/nUnable to install application as application was null`
-- Two install attempts logged as `sys_execution_tracker` rows on dev377226 (sys_id `54e1cb7d...` and `ffb1877d...`), both with the same error.
+- Two install attempts logged as `sys_execution_tracker` rows on test-instance-C, both with the same error.
 - Server-side execution tracker does not provide more detail beyond that string.
-- No `sys_app` or `sys_scope` record was created for `x_nowisor_isp` on dev377226 — install failed before scope provisioning.
+- No `sys_app` or `sys_scope` record was created for `x_nowisor_isp` on test-instance-C — install failed before scope provisioning.
 **Finding:** **F-004**.
 
 ### Stopwatch
@@ -87,13 +87,13 @@ The cleanest fix is probably (a). The build script needs to copy `package.json`,
 
 ## F-004 — Australia Patch 2 rejects the v1.0.0 Fluent SDK install
 
-**Symptom:** Server-side `sn_appclient_upload_processor.do` on dev377226 (Australia P2) returns tracker state 3 with the error `Exception occurred while installing application/nUnable to install application as application was null`. The error appears in two `sys_execution_tracker` rows, neither providing more detail than the string itself.
+**Symptom:** Server-side `sn_appclient_upload_processor.do` on test-instance-C (Australia P2) returns tracker state 3 with the error `Exception occurred while installing application/nUnable to install application as application was null`. The error appears in two `sys_execution_tracker` rows, neither providing more detail than the string itself.
 
 **Reproduction:**
 1. Fresh Australia P2 PDI, no prior nowisor artifacts
-2. Authenticated alias `dev377226-qa` with admin credentials
+2. Authenticated alias `test-instance-C-qa` with admin credentials
 3. `cd nowisor/instance-scan-pack && npx @servicenow/sdk build` — succeeds
-4. `npx @servicenow/sdk install --auth dev377226-qa` — fails as described
+4. `npx @servicenow/sdk install --auth test-instance-C-qa` — fails as described
 5. No `sys_app` or `sys_scope` record created for `x_nowisor_isp` — install rejected at the first server-side processing step
 
 **Possible root causes (not investigated):**
@@ -107,16 +107,16 @@ The cleanest fix is probably (a). The build script needs to copy `package.json`,
 - Review ServiceNow's Fluent SDK changelog for breaking changes between Zurich and Australia
 - Check `sys_db_object` for any plugin records that exist on Zurich but not on Australia P2 in the `com.glide.now.app_installer` namespace (or similar)
 
-**Relationship to sprint plan:** The sprint plan explicitly said `Do not use dev377226 (Australia, contaminated state, deferred to v1.1 release notes)`. This guidance came from the DOM-* workstream's findings about Australia's paid-SKU gating. The clean-state probe showed the DOM-* concern doesn't apply (the contamination didn't deploy). However, F-004 surfaces a *different* Australia concern: the v1.0.0 pack doesn't install cleanly on Australia P2. This justifies the original sprint-plan position from a different angle.
+**Relationship to sprint plan:** The sprint plan explicitly said `Do not use test-instance-C (Australia, contaminated state, deferred to v1.1 release notes)`. This guidance came from the DOM-* workstream's findings about Australia's paid-SKU gating. The clean-state probe showed the DOM-* concern doesn't apply (the contamination didn't deploy). However, F-004 surfaces a *different* Australia concern: the v1.0.0 pack doesn't install cleanly on Australia P2. This justifies the original sprint-plan position from a different angle.
 
 **Severity:** NOT a v1.0.0 ship-blocker. The pack is verified on Zurich Patch 6 (the documented target release). Australia compatibility is v1.1 backlog. The public repo will document the verified release in its README's Compatibility section and mark Australia as "verification pending."
 
 ## F-005 — now-sdk basic-auth incompatible with `/` and `%` characters in passwords
 
 **Symptom:** `npx @servicenow/sdk auth --add ... --type basic` accepts a password interactively, then attempts to verify it against the instance via basic auth, and returns `ERROR: User name or password invalid` even though the credentials are correct. Verified across two PDIs:
-- dev377226 password (`os%S/4NAsIj8`, contains `%` and `/`): failed
-- dev265147 password (`4-bj7YdRIH/z`, contains `/`): failed
-- dev265484 password (`GObeVU1y=l!5`, no special-URL chars): succeeded
+- test-instance-C password (random PDI-generated; contained both `%` and `/`): failed
+- test-instance-B password (random PDI-generated; contained `/`): failed
+- test-instance-A password (random PDI-generated; contained no URL-reserved characters): succeeded
 
 In each case, `curl -u "user:password" https://instance/api/now/v1/...` with the **same** password succeeds — confirming the credentials are valid and the issue is in the SDK's basic-auth header construction (likely URL-encoding the password before constructing the Authorization header, so the server sees the URL-encoded form instead of the raw form).
 
@@ -124,7 +124,7 @@ In each case, `curl -u "user:password" https://instance/api/now/v1/...` with the
 
 Wait, that contradicts the symptom — the prompt did succeed at storing the password (the SDK's `auth --list` showed the alias), but the immediate post-store verification failed. So the storage worked; the verification call is what URL-encodes incorrectly.
 
-**Upstream issue:** This is a ServiceNow SDK bug, not a nowisor pack bug. File it upstream against `@servicenow/sdk`. Workaround: provision PDIs with passwords that contain only `[A-Za-z0-9!=._-]` (the dev265484 password format) until the SDK is fixed.
+**Upstream issue:** This is a ServiceNow SDK bug, not a nowisor pack bug. File it upstream against `@servicenow/sdk`. Workaround: if you receive a PDI whose auto-generated admin password contains `/` or `%`, reset it via the developer portal to one within `[A-Za-z0-9!=._-]` before configuring the SDK alias.
 
 **Effort to investigate further:** ~30 min to reproduce minimally + report upstream. Out of scope for v1.0.0.
 
@@ -134,6 +134,6 @@ Item 2 of the v1.0.0 public-repo sprint **closes as PASS** with the following re
 - F-003 fixed in the README (single-path install procedure).
 - F-004 documented; tracked as v1.1 reactivation work.
 - F-005 documented as upstream `@servicenow/sdk` issue with workaround.
-- Fresh-Zurich install on dev265147 succeeded end-to-end; install time, bootstrap time, scan-trigger, and findings production all verified.
+- Fresh-Zurich install on test-instance-B succeeded end-to-end; install time, bootstrap time, scan-trigger, and findings production all verified.
 
 Items 2.2 and 2.3 close. Items 3.1-3.7 (public repo extraction + push) unblocked.
