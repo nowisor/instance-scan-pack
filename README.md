@@ -41,7 +41,7 @@ Detailed installation with explanations is in [Installation](#installation) belo
 | OOB ACL modified in last 24h | Drift detection | Recently-modified out-of-the-box ACL (pre-attack signal) | NIS2 21.2.a · ISO 27001 A.8.3 | HIGH |
 | CSRF token enforcement disabled | Property | `glide.security.use_csrf_token = false` | NIS2 21.2.a · ISO 27001 A.5.15 · DORA 9 | CRITICAL |
 | Attachment role unrestricted | Property | `glide.attachment.role = public` (Zurich OOB default) | NIS2 21.2.h · ISO 27001 A.5.34 · DORA 9 | HIGH |
-| Session idle timeout exceeds baseline | Property | `glide.ui.session_timeout > 30` (Zurich OOB default is 90) | NIS2 21.2.j · ISO 27001 A.8.5 · DORA 9 | HIGH |
+| Session idle timeout exceeds baseline | Property | `glide.ui.session_timeout > 30 minutes` (Zurich default is 30; legacy clone chains often carry 90) | NIS2 21.2.j · ISO 27001 A.8.5 · DORA 9 | HIGH |
 
 The full check inventory is in [`manifest.json`](./manifest.json). Every check has a customer-facing documentation page at `nowisor.com/kb/checks/<check-id>` covering the attack-path narrative, regulatory mapping, remediation steps, and a verification Background Script.
 
