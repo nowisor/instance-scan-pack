@@ -191,6 +191,23 @@ Findings appear as records in the `scan_finding` table. Each finding has two lay
 
 A complete sample finding is shown in [Sample finding output](#sample-finding-output) above. The metadata block is stable schema v1; the parsing pattern below extracts it programmatically.
 
+### Compliance rollup ("where's my NIS2 / DORA / ISO mapping?")
+
+Inside the standard ServiceNow Instance Scan UI, the framework mapping is **not visible as a column or facet** — it lives inside the JSON metadata block in `finding_details` (this is a design choice driven by `scan_finding` having no structured-metadata columns; adding custom columns would force a schema modification on the customer's instance).
+
+To roll up findings by framework, paste [`tools/compliance-rollup.js`](./tools/compliance-rollup.js) into **System Definition → Scripts - Background** and click Run. It prints a per-framework breakdown like:
+
+```
+NIS2 (4 article(s) cited)
+  21.2.a: 7 finding(s) [CRITICAL=2, HIGH=4, MEDIUM=1]
+    checks: nowisor-csrf-token-enforcement, nowisor-oob-acl-modifications, ...
+  21.2.d: 12 finding(s) [CRITICAL=1, HIGH=11]
+    checks: nowisor-eval-usage-detector, nowisor-glide-evaluator-detector, ...
+  ...
+```
+
+For CISO-language explanation of each article and finding-by-finding remediation, the [nowisor advisor](https://nowisor.com) at the higher tiers consumes these findings and renders the compliance grouping natively.
+
 To parse all nowisor findings programmatically:
 
 ```javascript
