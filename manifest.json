@@ -357,7 +357,7 @@
       "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
       "active": false,
       "deferred_to": "v1.1",
-      "deferred_reason": "Tier 2 planted-artifact validation produced zero findings: predicate regex-matches LITERAL node value, but AST splits 'var password = ...' into NAME + OP + LITERAL nodes — LITERAL value alone never contains the labelled-assignment shape. v1.1 reactivation: rewrite predicate to combine NAME (identifier matching password/api_key/secret/token) with adjacent LITERAL value, OR adopt engine.getSource() regex if API proves stable."
+      "deferred_reason": "Predicate rewritten 2026-05-16: NAME (credential-shaped identifier) co-occurring on same/next line with LITERAL of plausible credential length. Uses AST APIs verified by active eval-usage-detector + set-roles-detector. Pending PDI planted-artifact verification before active:true. Plant `var password = 'Pa$$w0rd123!'` on dev265484, confirm finding on planted line, then reactivate."
     },
     {
       "id": "nowisor-direct-property-write",
@@ -376,7 +376,7 @@
       "global_scope_tables_read": ["sys_script_include", "sys_script"],
       "active": false,
       "deferred_to": "v1.1",
-      "deferred_reason": "Tier 2 planted-artifact validation produced zero findings against `new GlideRecord('sys_properties')`. Either LITERAL.getValue() API behavior differs from assumption, or GlideRecord constructor argument AST shape needs different anchor (e.g., CALL of .update()/.insert() on GlideRecord whose first arg is 'sys_properties'). v1.1 reactivation: ship a diagnostic LinterCheck that dumps node-type tree around table-name literals, redesign predicate accordingly."
+      "deferred_reason": "Predicate rewritten 2026-05-16: anchor on NAME 'GlideRecord' under CALL/NEW parent (set-roles-detector shape) with same-line LITERAL 'sys_properties' co-occurrence. Uses AST APIs verified by active detectors. Pending PDI planted-artifact verification before active:true. Plant `new GlideRecord('sys_properties').update()` on dev265484, confirm finding on planted line, then reactivate."
     },
     {
       "id": "nowisor-domain-separation-script-include",
