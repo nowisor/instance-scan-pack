@@ -7,30 +7,28 @@
 // anyone with script-table read access, and they propagate across instances via update
 // sets and export artifacts.
 //
-// AST PATTERN (Tier 3 fix, 2026-05-16): NAME + adjacent STRING by line co-occurrence
+// AST PATTERN (Tier 4 fix, 2026-05-16): NAME + adjacent STRING via toSource()
 //
 // History:
-// - v1.0.0: label-plus-literal regex against LITERAL.getValue(). Failed because the
-//   AST splits `var password = '…'` into NAME('password') + LITERAL('…') children of
-//   a VAR node — LITERAL value alone never matches the labelled-assignment shape.
-// - 2026-05-16 Tier 2 attempt: rewrote to anchor on NAME with credential identifier,
-//   co-occurring with LITERAL on the same line. Test-scan on dev265147 produced zero
-//   findings. Diagnostic dump (TOTAL_VISITED=27 across planted Script Include) showed
-//   the actual node type for string literals is `STRING`, not `LITERAL`. The Tier 2
-//   predicate never enters its STRING branch.
-// - 2026-05-16 Tier 3 fix (this revision): accept `STRING` and `LITERAL` both. Same
-//   line-co-occurrence shape, just with the correct node-type name.
+// - v1.0.0: label-plus-literal regex against LITERAL.getValue(). Silent-fail.
+// - Tier 2 (2026-05-16): NAME + LITERAL co-occurrence by line. Silent-fail because
+//   string literals on this engine are typed STRING, not LITERAL.
+// - Tier 3 (2026-05-16): accept STRING and LITERAL. Silent-fail because STRING
+//   nodes don't expose getValue() — `getValueERR=Cannot find function getValue
+//   in object [object RhinoNode]`. The only working value-extraction API on
+//   STRING is node.toSource(), which returns the literal WITH surrounding quotes,
+//   e.g. `"Pa$$w0rd123!"`.
+// - Tier 4 (this revision): use node.toSource() and strip the wrapping quotes.
 //
-// Verified node shape for `var password = "Pa$$w0rd123!";` on dev265147:
-//   VAR (line 3) > NAME id='password' (line 3) + STRING (line 3) — both children of
-//   the same VAR. Co-occurrence by line number is sound.
+// Verified API surface (dev265147, 2026-05-16):
+//   STRING node:  getValue() throws, getString() throws, toSource() returns quoted literal
+//   NAME node:    getNameIdentifier() returns identifier string
+//   All nodes:    getTypeName(), getLineNo(), getParent()
 //
 // Predicate: track two sets of lines.
 //   (a) NAME nodes whose identifier matches the credential-name pattern
-//   (b) STRING (or LITERAL) nodes whose getValue() is a string of 4..199 chars
-// A line is flagged when (a) and (b) agree on the same or next line. Uses AST APIs
-// verified on dev265147 by the active eval-usage-detector and set-roles-detector,
-// plus STRING.getValue() — verified by the Tier 3 diagnostic round-trip.
+//   (b) STRING (or LITERAL) nodes whose unquoted toSource() is a 4..199 char string
+// A line is flagged when (a) and (b) agree on the same or next line.
 //
 // False-positive shape: `var passwordPolicy = "Default policy text"` will flag, since
 // the variable IS named password-shaped. Acceptable for an audit detector — every
@@ -70,15 +68,18 @@
         // STRING is the actual node type on the verified engine. LITERAL retained
         // defensively for releases / builds where the type-name differs.
         if (t === 'STRING' || t === 'LITERAL') {
-            var v
+            // toSource() is the only value-extraction API confirmed on STRING nodes
+            // (dev265147 diagnostic round-trip, 2026-05-16). It returns the literal
+            // WITH surrounding quotes — strip them. getValue() throws on STRING.
+            var src
             try {
-                v = node.getValue()
+                src = node.toSource()
             } catch (e) {
                 return
             }
-            if (v == null) return
-            var s = String(v)
-            // Tolerate engines that return quoted vs unquoted literal source
+            if (src == null) return
+            var s = String(src)
+            // Strip wrapping " or ' from toSource() output
             var u = s.replace(/^['"]/, '').replace(/['"]$/, '')
             // Plausible credential length: long enough to be a password / token,
             // short enough to exclude prose. Excludes empty strings.

@@ -7,20 +7,23 @@
 // cache invalidation and audit consistency. Detection anchors on the constructor
 // identifier and the table-name argument by line co-occurrence.
 //
-// AST PATTERN (Tier 3 fix, 2026-05-16): NAME 'GlideRecord' under NEW/CALL +
-// STRING 'sys_properties' on the same line
+// AST PATTERN (Tier 4 fix, 2026-05-16): NAME 'GlideRecord' under NEW/CALL +
+// STRING 'sys_properties' via toSource()
 //
 // History:
-// - v1.0.0: LITERAL-anchored ancestor walk to NEW/CALL. Silent-fail.
-// - 2026-05-16 Tier 2: anchored on NAME 'GlideRecord' under CALL/NEW + same-line
-//   LITERAL 'sys_properties'. Still silent-fail because the actual node type for
-//   string literals on the verified engine is `STRING`, not `LITERAL`.
-// - 2026-05-16 Tier 3 (this revision): accept `STRING` and `LITERAL` both. Same
-//   structure, correct node-type name.
+// - v1.0.0: LITERAL-anchored ancestor walk. Silent-fail.
+// - Tier 2 (2026-05-16): NAME 'GlideRecord' + same-line LITERAL. Silent-fail —
+//   string literals are typed STRING on this engine.
+// - Tier 3 (2026-05-16): accept STRING and LITERAL. Silent-fail — STRING.getValue()
+//   throws `Cannot find function getValue in object [object RhinoNode]`.
+// - Tier 4 (this revision): use node.toSource() and strip wrapping quotes.
 //
-// Verified node shape for `new GlideRecord("sys_properties").update()` on
-// dev265147: NEW/CALL > NAME id='GlideRecord' + STRING (value 'sys_properties'),
-// same-line co-occurrence on the line of the constructor identifier.
+// Verified API surface (dev265147, 2026-05-16):
+//   STRING node:  toSource() returns the literal WITH surrounding quotes
+//   NAME node:    getNameIdentifier() returns identifier string
+//
+// Verified shape for `new GlideRecord("sys_properties").update()`:
+//   NEW/CALL > NAME id='GlideRecord' + STRING toSource()='"sys_properties"'
 //
 // Predicate: track two sets of lines.
 //   (a) NAME 'GlideRecord' whose parent is CALL or NEW (the constructor site)
@@ -81,15 +84,16 @@
         // STRING is the actual node type on the verified engine. LITERAL retained
         // defensively for releases / builds where the type-name differs.
         if (t === 'STRING' || t === 'LITERAL') {
-            var v
+            // toSource() is the only value-extraction API confirmed on STRING nodes.
+            // It returns the literal WITH surrounding quotes — strip them.
+            var src
             try {
-                v = node.getValue()
+                src = node.toSource()
             } catch (e) {
                 return
             }
-            if (v == null) return
-            var s = String(v)
-            // Tolerate engines that return quoted vs unquoted literal source
+            if (src == null) return
+            var s = String(src)
             var u = s.replace(/^['"]/, '').replace(/['"]$/, '')
             if (u === 'sys_properties') {
                 sysPropLines[node.getLineNo() + 1] = true
