@@ -7,23 +7,25 @@
 // cache invalidation and audit consistency. Detection anchors on the constructor
 // identifier and the table-name argument by line co-occurrence.
 //
-// AST PATTERN (Tier 2 fix, 2026-05-16): NAME 'GlideRecord' under NEW/CALL +
-// LITERAL 'sys_properties' on the same line
+// AST PATTERN (Tier 3 fix, 2026-05-16): NAME 'GlideRecord' under NEW/CALL +
+// STRING 'sys_properties' on the same line
 //
-// The v1.0.0-build predicate anchored on LITERAL 'sys_properties' and walked up
-// ancestors looking for a NEW/CALL. Tier 2 planted-artifact verification on
-// dev265484 (Zurich Patch 6) confirmed zero findings against
-// `new GlideRecord('sys_properties').update()`. Likely cause: in the Rhino AST,
-// the LITERAL argument is a child of the CALL whose function is NEW(GlideRecord),
-// and the visit traversal of LITERAL.getParent() chain does not pass through a
-// node typed exactly 'NEW' or 'CALL' as written. Rather than continue to chase
-// the ancestor shape, this fix anchors on the part of the expression that is
-// uniquely identifiable in the verified AST surface: NAME 'GlideRecord' with a
-// CALL/NEW parent (proven by the active set-roles-detector pattern).
+// History:
+// - v1.0.0: LITERAL-anchored ancestor walk to NEW/CALL. Silent-fail.
+// - 2026-05-16 Tier 2: anchored on NAME 'GlideRecord' under CALL/NEW + same-line
+//   LITERAL 'sys_properties'. Still silent-fail because the actual node type for
+//   string literals on the verified engine is `STRING`, not `LITERAL`.
+// - 2026-05-16 Tier 3 (this revision): accept `STRING` and `LITERAL` both. Same
+//   structure, correct node-type name.
 //
-// Fixed predicate: track two sets of lines.
+// Verified node shape for `new GlideRecord("sys_properties").update()` on
+// dev265147: NEW/CALL > NAME id='GlideRecord' + STRING (value 'sys_properties'),
+// same-line co-occurrence on the line of the constructor identifier.
+//
+// Predicate: track two sets of lines.
 //   (a) NAME 'GlideRecord' whose parent is CALL or NEW (the constructor site)
-//   (b) LITERAL whose getValue() is 'sys_properties' (with or without surrounding quotes)
+//   (b) STRING (or LITERAL) whose getValue() is 'sys_properties' (with or without
+//       surrounding quotes)
 // A line is flagged when both sets agree on the same line. Cross-line constructor
 // calls are exceedingly rare in practice; the same-line constraint keeps false
 // positives near zero.
@@ -76,16 +78,19 @@
             return
         }
 
-        if (t === 'LITERAL') {
+        // STRING is the actual node type on the verified engine. LITERAL retained
+        // defensively for releases / builds where the type-name differs.
+        if (t === 'STRING' || t === 'LITERAL') {
             var v
             try {
                 v = node.getValue()
             } catch (e) {
                 return
             }
-            if (typeof v !== 'string') return
+            if (v == null) return
+            var s = String(v)
             // Tolerate engines that return quoted vs unquoted literal source
-            var u = v.replace(/^['"]/, '').replace(/['"]$/, '')
+            var u = s.replace(/^['"]/, '').replace(/['"]$/, '')
             if (u === 'sys_properties') {
                 sysPropLines[node.getLineNo() + 1] = true
             }

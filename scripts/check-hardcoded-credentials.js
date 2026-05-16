@@ -7,23 +7,30 @@
 // anyone with script-table read access, and they propagate across instances via update
 // sets and export artifacts.
 //
-// AST PATTERN (Tier 2 fix, 2026-05-16): NAME + adjacent LITERAL by line co-occurrence
+// AST PATTERN (Tier 3 fix, 2026-05-16): NAME + adjacent STRING by line co-occurrence
 //
-// The v1.0.0-build predicate matched a labelled-assignment regex against a single
-// LITERAL node's getValue(). Tier 2 planted-artifact verification on dev265484
-// (Zurich Patch 6) confirmed zero findings against `var password = 'Pa$$w0rd123!'`:
-// the Rhino AST splits this into NAME('password') + OP('=') + LITERAL('Pa$$w0rd123!'),
-// and LITERAL.getValue() returns just the password string without the label, so the
-// label-plus-literal regex never matched.
+// History:
+// - v1.0.0: label-plus-literal regex against LITERAL.getValue(). Failed because the
+//   AST splits `var password = '…'` into NAME('password') + LITERAL('…') children of
+//   a VAR node — LITERAL value alone never matches the labelled-assignment shape.
+// - 2026-05-16 Tier 2 attempt: rewrote to anchor on NAME with credential identifier,
+//   co-occurring with LITERAL on the same line. Test-scan on dev265147 produced zero
+//   findings. Diagnostic dump (TOTAL_VISITED=27 across planted Script Include) showed
+//   the actual node type for string literals is `STRING`, not `LITERAL`. The Tier 2
+//   predicate never enters its STRING branch.
+// - 2026-05-16 Tier 3 fix (this revision): accept `STRING` and `LITERAL` both. Same
+//   line-co-occurrence shape, just with the correct node-type name.
 //
-// Fixed predicate: track two sets of lines.
+// Verified node shape for `var password = "Pa$$w0rd123!";` on dev265147:
+//   VAR (line 3) > NAME id='password' (line 3) + STRING (line 3) — both children of
+//   the same VAR. Co-occurrence by line number is sound.
+//
+// Predicate: track two sets of lines.
 //   (a) NAME nodes whose identifier matches the credential-name pattern
-//   (b) LITERAL nodes whose getValue() is a string of plausible credential length
-// A line is flagged when set (a) AND set (b) agree on the same line or the next line
-// (assignment can wrap). This uses only AST APIs already verified by the active
-// eval-usage-detector (NAME.getNameIdentifier) and set-roles-detector (NAME-anchored
-// pattern), plus LITERAL.getValue() — verified empirically to return the unquoted
-// string value during the Tier 2 round-trip on dev265484.
+//   (b) STRING (or LITERAL) nodes whose getValue() is a string of 4..199 chars
+// A line is flagged when (a) and (b) agree on the same or next line. Uses AST APIs
+// verified on dev265147 by the active eval-usage-detector and set-roles-detector,
+// plus STRING.getValue() — verified by the Tier 3 diagnostic round-trip.
 //
 // False-positive shape: `var passwordPolicy = "Default policy text"` will flag, since
 // the variable IS named password-shaped. Acceptable for an audit detector — every
@@ -60,16 +67,19 @@
             return
         }
 
-        if (t === 'LITERAL') {
+        // STRING is the actual node type on the verified engine. LITERAL retained
+        // defensively for releases / builds where the type-name differs.
+        if (t === 'STRING' || t === 'LITERAL') {
             var v
             try {
                 v = node.getValue()
             } catch (e) {
                 return
             }
-            if (typeof v !== 'string') return
+            if (v == null) return
+            var s = String(v)
             // Tolerate engines that return quoted vs unquoted literal source
-            var u = v.replace(/^['"]/, '').replace(/['"]$/, '')
+            var u = s.replace(/^['"]/, '').replace(/['"]$/, '')
             // Plausible credential length: long enough to be a password / token,
             // short enough to exclude prose. Excludes empty strings.
             if (u.length >= 4 && u.length < 200) {
