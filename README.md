@@ -6,7 +6,8 @@ Open-source ServiceNow security check pack that runs inside your instance and pr
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **License:** Apache-2.0
 - **Verified against:** ServiceNow Zurich Patch 6 (dev265484). Australia Patch 2 install fails — see [Compatibility](#compatibility); v1.1 reactivation work.
-- **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 (only required if you build from source; the pre-built update set has no runtime SDK dependency)
+- **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 (required for the install path; v1.1 is scoped to add a no-toolchain install option)
+- **Releases:** [github.com/nowisor/instance-scan-pack/releases](https://github.com/nowisor/instance-scan-pack/releases) — tagged build bundles published for verification and audit (see §Installation for what they are and aren't)
 
 ## Quickstart
 
@@ -114,7 +115,7 @@ This pack is **not** a replacement for ServiceNow Security Center or the platfor
 
 Install the pack via the ServiceNow Fluent SDK. The procedure is single-path: clone the repo, install dependencies, build, install. Both the SDK and Node 20+ are required.
 
-> The artifact at `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is the build-output bundle (scope and per-record XMLs). It is **not** a standalone installer — it ships alongside the source for transparency and download-verification, not as a separate install path. A pure-UI install path that requires no local toolchain is on the v1.1 roadmap.
+> Each tagged release publishes a build-output bundle on the [Releases page](https://github.com/nowisor/instance-scan-pack/releases) — `nowisor-agent-v<version>.tar.gz`, containing scope and per-record XMLs (a snapshot of what `now-sdk install` uploads to the instance). The same bundle is what `npx now-sdk build` produces locally at `dist/update-sets/` (gitignored, regenerated per build). The release artifact is **not** a standalone installer: the Fluent SDK accepts only a `--source` directory containing `package.json`, with no flag to consume a pre-built tarball, so the documented install path remains clone-source + `now-sdk install`. The release artifact is published for download-verification, audit, and diff purposes — verify the bundle a tag claims to ship matches what the source builds. A turnkey install path (single XML importable via *Retrieved Update Sets → Import Update Set from XML*) is on the v1.1 roadmap.
 
 ### Prerequisites
 
@@ -263,7 +264,7 @@ npx now-sdk install --auth your-alias --reinstall
 # Background Script → paste bootstrap/install-suite.js → Run
 ```
 
-Or via update set: download the new XML from `dist/update-sets/`, import, preview, commit, re-run bootstrap.
+A single-XML update-set upgrade path (download from Releases, import via *Retrieved Update Sets*) is v1.1 work and tracked in the [v1.1 backlog](./V1_PUBLIC_REPO_RETROSPECTIVE.md#v11-backlog-carried-forward-from-this-sprint).
 
 Existing `scan_finding` records persist (FK is preserved against deterministic check sys_ids).
 

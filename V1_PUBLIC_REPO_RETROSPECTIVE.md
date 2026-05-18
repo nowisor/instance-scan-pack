@@ -97,7 +97,8 @@ preserved retrospective files in this repository.
 - Reproduce F-005 minimally and report to the `@servicenow/sdk` team (basic-auth password handling).
 - Apply N-001 (`mfa-enforcement` catch-branch wording), N-002 (set-workflow + glide-record-vs-secure OOB-vs-customer partition), N-003 (empty-source-display fallback) from the bundle test results.
 - Cookie cluster hardening: `glide.cookies.samesite` was found `NOT_REGISTERED` on the Zurich Patch 6 default; recommend the customer set this property.
-- Build a pure-XML or pure-UI install path so customers without local Node + the SDK can install without a developer workstation.
+- **Turnkey installer workstream (8–16h estimate).** Build a single Customer Update Set XML wrapping the 47 per-record XMLs as `sys_update_xml` children under a `sys_remote_update_set` envelope, so customers can install via *Retrieved Update Sets → Import Update Set from XML* with no local Node + SDK toolchain. Requires: (a) a packaging script that consumes the SDK's `target/*.zip` and emits the wrapping XML; (b) install verification on a clean PDI via the UI path; (c) update README install procedure to surface the new path as primary, demoting clone-source to "build from source / contributor path".
+- **Canonical release-artifact pipeline (part of the same workstream).** Today's release pipeline produced two different artifacts at two different SHAs — `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` (built 2026-05-12, predates Tier 2 fixes) vs. `target/nowisor_instance_scan_pack_1_0_0.zip` (built 2026-05-13 at the tag SHA). The v1.0.0-build-tier2 release attaches the tag-matching artifact, but the in-repo `dist/` path needed manual rebuild. v1.1 should make `npm run release:build` (or equivalent) idempotently produce a single canonical artifact matching the tag SHA, gated by CI on push of any `v*` tag.
 
 ## Next
 
