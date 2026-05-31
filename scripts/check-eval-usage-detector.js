@@ -17,6 +17,29 @@
 // Schema: v1 (finding emits ---NOWISOR_METADATA--- block parsed by advisor)
 // ES5-only (Instance Scan runtime constraint)
 ;(function evalUsageDetector(engine) {
+    // _resolveArtifact (A1-DEP): emits evidence.artifact_scope + artifact_table so the
+    // nowisor correlation engine can fire its LINTER-NOISE verdict for OOB/system-scope
+    // findings. The LinterCheck framework auto-populates scan_finding.table + record
+    // after the script runs; we re-read them mid-script. API uncertainty: if engine.finding
+    // fields aren't yet populated at script-execution time, helper returns empty strings
+    // and the correlation engine downgrades to INVESTIGATE rather than misclassifying.
+    function _resolveArtifact() {
+        var scope = ''
+        var tableName = ''
+        try {
+            if (engine && engine.finding && engine.finding.getValue) {
+                tableName = engine.finding.getValue('table') || engine.finding.getValue('table_name') || ''
+                var recId = engine.finding.getValue('record') || ''
+                if (tableName && recId) {
+                    var gr = new GlideRecord(tableName)
+                    if (gr.get(recId)) {
+                        scope = gr.getValue('sys_scope') || ''
+                    }
+                }
+            }
+        } catch (e) { /* best-effort */ }
+        return { artifact_scope: scope, artifact_table: tableName }
+    }
     var line_numbers = []
 
     engine.rootNode.visit(function (node) {
@@ -32,6 +55,7 @@
 
     if (line_numbers.length === 0) return
 
+    var _art = _resolveArtifact()
     var metadata = {
         nowisor_check_id: 'nowisor-eval-usage-detector',
         nowisor_check_version: '1.0.0',
@@ -44,6 +68,8 @@
         evidence: {
             line_numbers: line_numbers,
             occurrence_count: line_numbers.length,
+            artifact_scope: _art.artifact_scope,
+            artifact_table: _art.artifact_table,
         },
         severity: 1,
         remediation_id: 'eval-001',

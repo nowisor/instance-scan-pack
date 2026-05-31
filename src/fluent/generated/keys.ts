@@ -17,6 +17,10 @@ declare global {
                         table: 'scan_script_only_check'
                         id: '625d958169f541588e3c45128468e1ad'
                     }
+                    'nowisor-audit-coverage-gap': {
+                        table: 'scan_script_only_check'
+                        id: '22fcea3957b9db3ce7493c4fac419286'
+                    }
                     'nowisor-cookie-http-only': {
                         table: 'scan_script_only_check'
                         id: '8b4167394dde4c07ba44ea980d18f62e'

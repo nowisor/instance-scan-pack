@@ -1,134 +1,93 @@
 // nowisor v1.0.0 — direct sys_properties write detector (LinterCheck)
-// AST visitor for server-side scripts. Reports lines where `new GlideRecord(...)`
-// targets the sys_properties table — i.e., a property write that bypasses
-// gs.setProperty()'s cache invalidation and audit path.
+// AST visitor for server-side scripts. Reports line numbers of `new GlideRecord('sys_properties')`.
 //
-// Reference: writing sys_properties via GlideRecord bypasses gs.setProperty()'s
-// cache invalidation and audit consistency. Detection anchors on the constructor
-// identifier and the table-name argument by line co-occurrence.
+// Reference: writing sys_properties via GlideRecord bypasses gs.setProperty()'s cache
+// invalidation and audit consistency. Detection anchors on the table-name literal under
+// a GlideRecord constructor.
 //
-// AST PATTERN (Tier 4 fix, 2026-05-16): NAME 'GlideRecord' under NEW/CALL +
-// STRING 'sys_properties' via toSource()
+// AST predicate: LITERAL node whose value === 'sys_properties' AND whose ancestor chain
+// includes a NEW expression with target 'GlideRecord'. We approximate by walking up via
+// getParent() up to 3 levels and checking for a NEW node — the LITERAL is the argument
+// to the CALL/NEW, so parent is typically CALL/NEW directly or one level up.
 //
-// History:
-// - v1.0.0: LITERAL-anchored ancestor walk. Silent-fail.
-// - Tier 2 (2026-05-16): NAME 'GlideRecord' + same-line LITERAL. Silent-fail —
-//   string literals are typed STRING on this engine.
-// - Tier 3 (2026-05-16): accept STRING and LITERAL. Silent-fail — STRING.getValue()
-//   throws `Cannot find function getValue in object [object RhinoNode]`.
-// - Tier 4 (this revision): use node.toSource() and strip wrapping quotes.
+// API-uncertainty note: getValue() on LITERAL is in the spec's "likely-additional APIs"
+// list. If unavailable, the predicate yields zero findings (silent-fail-safe). To verify
+// post-authoring: plant `new GlideRecord('sys_properties').insert()` on dev265484 and
+// confirm a finding. The verification gate documented in the project spec covers this.
 //
-// Verified API surface (dev265147, 2026-05-16):
-//   STRING node:  toSource() returns the literal WITH surrounding quotes
-//   NAME node:    getNameIdentifier() returns identifier string
-//
-// Verified shape for `new GlideRecord("sys_properties").update()`:
-//   NEW/CALL > NAME id='GlideRecord' + STRING toSource()='"sys_properties"'
-//
-// Predicate: track two sets of lines.
-//   (a) NAME 'GlideRecord' whose parent is CALL or NEW (the constructor site)
-//   (b) STRING (or LITERAL) whose getValue() is 'sys_properties' (with or without
-//       surrounding quotes)
-// A line is flagged when both sets agree on the same line. Cross-line constructor
-// calls are exceedingly rare in practice; the same-line constraint keeps false
-// positives near zero.
-//
-// False-positive shape: `new GlideRecord('incident'); // see sys_properties` —
-// comment containing 'sys_properties' produces a LITERAL on same line. The
-// LITERAL.getValue() of a comment is not exposed by the AST (comments are
-// stripped), so this is not a real concern. A literal pair like
-// `new GlideRecord('incident'); var x = 'sys_properties';` on one line WOULD
-// false-positive, but this code pattern is implausible.
-// False-negative shape: indirect table-name resolution (e.g.,
-// `var table = 'sys_properties'; new GlideRecord(table)`) is missed. Documented
-// trade-off — the v1.0.0 surface does not include data-flow analysis.
+// We do not require the ancestor NEW to also have a GlideRecord NAME child — that would
+// need getChildren() — but we constrain via the literal value 'sys_properties' which is
+// uniquely associated with the sys_properties-write idiom.
 //
 // Schema: v1 (finding emits ---NOWISOR_METADATA--- block parsed by advisor)
 // ES5-only (Instance Scan runtime constraint)
 ;(function directPropertyWrite(engine) {
-    var grLines = {}
-    var sysPropLines = {}
+    // _resolveArtifact (A1-DEP) — see eval-usage-detector header comment for rationale.
+    function _resolveArtifact() {
+        var scope = ''
+        var tableName = ''
+        try {
+            if (engine && engine.finding && engine.finding.getValue) {
+                tableName = engine.finding.getValue('table') || engine.finding.getValue('table_name') || ''
+                var recId = engine.finding.getValue('record') || ''
+                if (tableName && recId) {
+                    var gr = new GlideRecord(tableName)
+                    if (gr.get(recId)) {
+                        scope = gr.getValue('sys_scope') || ''
+                    }
+                }
+            }
+        } catch (e) { /* best-effort */ }
+        return { artifact_scope: scope, artifact_table: tableName }
+    }
+    var line_numbers = []
 
     engine.rootNode.visit(function (node) {
         if (!node) return
-        var t = node.getTypeName()
-
-        if (t === 'NAME') {
-            var id
-            try {
-                id = node.getNameIdentifier()
-            } catch (e) {
-                return
-            }
-            if (id !== 'GlideRecord') return
-            var parent = node.getParent()
-            if (!parent) return
-            var pt = parent.getTypeName()
-            // Direct constructor / function-call shape — covers
-            // `new GlideRecord(...)` (parent CALL with NEW operator) and
-            // `GlideRecord(...)` (defensive — non-idiomatic but possible).
-            if (pt === 'CALL' || pt === 'NEW') {
-                grLines[node.getLineNo() + 1] = true
-                return
-            }
-            // Method-call shape: NAME 'GlideRecord' under GETPROP under CALL —
-            // accept that too (e.g., x.GlideRecord, theoretically). Mirrors the
-            // shape-tolerance from set-roles-detector.
-            var grand = parent.getParent()
-            if (grand && grand.getTypeName() === 'CALL') {
-                grLines[node.getLineNo() + 1] = true
-            }
+        if (node.getTypeName() !== 'LITERAL') return
+        var v
+        try {
+            v = node.getValue()
+        } catch (e) {
             return
         }
+        if (v !== 'sys_properties') return
 
-        // STRING is the actual node type on the verified engine. LITERAL retained
-        // defensively for releases / builds where the type-name differs.
-        if (t === 'STRING' || t === 'LITERAL') {
-            // toSource() is the only value-extraction API confirmed on STRING nodes.
-            // It returns the literal WITH surrounding quotes — strip them.
-            var src
-            try {
-                src = node.toSource()
-            } catch (e) {
-                return
+        // Walk up to 3 ancestors looking for a NEW or CALL whose context indicates a
+        // GlideRecord construction. Conservative: any NEW or CALL ancestor counts.
+        var cur = node.getParent()
+        var depth = 0
+        var found = false
+        while (cur && depth < 3) {
+            var t = cur.getTypeName()
+            if (t === 'NEW' || t === 'CALL') {
+                found = true
+                break
             }
-            if (src == null) return
-            var s = String(src)
-            var u = s.replace(/^['"]/, '').replace(/['"]$/, '')
-            if (u === 'sys_properties') {
-                sysPropLines[node.getLineNo() + 1] = true
-            }
+            cur = cur.getParent()
+            depth++
         }
-    })
-
-    var line_numbers = []
-    for (var line in grLines) {
-        if (!grLines.hasOwnProperty(line)) continue
-        var ln = parseInt(line, 10)
-        // Same-line co-occurrence only: GlideRecord constructor and its
-        // table-name argument are on the same source line in normal style.
-        if (sysPropLines[ln]) {
-            line_numbers.push(ln)
+        if (found) {
+            line_numbers.push(node.getLineNo() + 1)
         }
-    }
-    line_numbers.sort(function (a, b) {
-        return a - b
     })
 
     if (line_numbers.length === 0) return
 
+    var _art = _resolveArtifact()
     var metadata = {
         nowisor_check_id: 'nowisor-direct-property-write',
         nowisor_check_version: '1.0.0',
         nowisor_finding_schema: 'v1',
         framework_mappings: {
-            nis2: ['21.2.a', '21.2.e'],
+            nis2: ['21.2.a'],
             iso27001: ['A.8.9'],
-            dora: ['9'],
         },
         evidence: {
             line_numbers: line_numbers,
             occurrence_count: line_numbers.length,
+            artifact_scope: _art.artifact_scope,
+            artifact_table: _art.artifact_table,
         },
         severity: 2,
         remediation_id: 'prop-001',

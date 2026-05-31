@@ -1,23 +1,20 @@
 import { LinterCheck } from '@servicenow/sdk/core'
 
-// PREDICATE FIXED 2026-05-16 — pending PDI planted-artifact verification.
+// DEFERRED TO v1.1 (Tier 2 verification, 2026-05-12):
+// Planted-artifact validation on dev265484 produced zero findings against
+// `new GlideRecord('sys_properties')`. The predicate looks for a LITERAL
+// node with value 'sys_properties' under a NEW/CALL ancestor. Either the
+// LITERAL.getValue() API is unavailable / returns a different shape than
+// expected, OR the AST representation of GlideRecord constructor argument
+// chains differs from the parent-walking assumption.
 //
-// Tier 2 verification on dev265484 (2026-05-12) confirmed the original
-// LITERAL-anchored predicate (LITERAL 'sys_properties' under NEW/CALL
-// ancestor) produced zero findings against
-// `new GlideRecord('sys_properties').update()`. Ancestor walk from the
-// LITERAL did not reach a NEW or CALL node in the form expected.
-//
-// 2026-05-16 fix: anchor on NAME 'GlideRecord' under CALL/NEW parent —
-// the same shape proven by set-roles-detector — and confirm via same-line
-// co-occurrence with a LITERAL whose unquoted value is 'sys_properties'.
-// Uses only AST APIs verified by active detectors.
-//
-// Reactivation gate: deploy this revision to dev265484, plant
-// `new GlideRecord('sys_properties').update()` in a Script Include, run a
-// scan, confirm finding emitted on the planted line. Then flip
-// `active: true` here AND in manifest.json. Held at `active: false` until
-// that PDI gate clears.
+// v1.1 reactivation criteria: investigate the AST shape of
+// `new GlideRecord('sys_properties').update()` on dev265484 — possibly via
+// a diagnostic LinterCheck that dumps node types around table-name
+// literals. The detection model may need to anchor on the CALL of
+// .update() / .insert() / .deleteRecord() on a GlideRecord whose first
+// constructor arg is 'sys_properties', rather than the literal alone.
+// Confirm via planted-artifact verification before re-activation.
 export const directPropertyWriteCheck = LinterCheck({
     $id: Now.ID['nowisor-direct-property-write'],
     name: 'Direct sys_properties Write Detector',

@@ -22,6 +22,24 @@
 // Schema: v1 (finding emits ---NOWISOR_METADATA---block parsed by advisor)
 // ES5-only (Instance Scan runtime constraint)
 ;(function domainSeparationScriptInclude(engine) {
+    // _resolveArtifact (A1-DEP) — see eval-usage-detector header comment for rationale.
+    function _resolveArtifact() {
+        var scope = ''
+        var tableName = ''
+        try {
+            if (engine && engine.finding && engine.finding.getValue) {
+                tableName = engine.finding.getValue('table') || engine.finding.getValue('table_name') || ''
+                var recId = engine.finding.getValue('record') || ''
+                if (tableName && recId) {
+                    var gr = new GlideRecord(tableName)
+                    if (gr.get(recId)) {
+                        scope = gr.getValue('sys_scope') || ''
+                    }
+                }
+            }
+        } catch (e) { /* best-effort */ }
+        return { artifact_scope: scope, artifact_table: tableName }
+    }
     var auth_mutation_lines = []
     var sys_overrides_seen = false
 
@@ -52,6 +70,7 @@
     if (auth_mutation_lines.length === 0) return
     if (sys_overrides_seen) return
 
+    var _art = _resolveArtifact()
     var metadata = {
         nowisor_check_id: 'nowisor-domain-separation-script-include',
         nowisor_check_version: '1.0.0',
@@ -64,6 +83,8 @@
         evidence: {
             line_numbers: auth_mutation_lines,
             occurrence_count: auth_mutation_lines.length,
+            artifact_scope: _art.artifact_scope,
+            artifact_table: _art.artifact_table,
         },
         severity: 2,
         remediation_id: 'ds-si-001',

@@ -1,23 +1,18 @@
 import { LinterCheck } from '@servicenow/sdk/core'
 
-// PREDICATE FIXED 2026-05-16 — pending PDI planted-artifact verification.
+// DEFERRED TO v1.1 (Tier 2 verification, 2026-05-12):
+// Planted-artifact validation on dev265484 produced zero findings against
+// `var password = 'Pa$$w0rd123!'`. The predicate matches a regex like
+// `password\s*[:=]\s*['"]…['"]` against the LITERAL node's value, but the
+// AST splits this assignment into a NAME node ('password') + OP ('=') +
+// LITERAL ('Pa$$w0rd123!'). The LITERAL's getValue() returns just the
+// password string, which never matches the labelled-assignment regex.
 //
-// Tier 2 verification on dev265484 (2026-05-12) confirmed the original
-// labelled-assignment regex against LITERAL.getValue() never matched: the
-// Rhino AST splits `var password = '…'` into NAME('password') + OP('=') +
-// LITERAL('…'), and LITERAL.getValue() returns the bare password string.
-//
-// 2026-05-16 fix: anchor on NAME nodes whose identifier matches the
-// credential-name pattern, and confirm via line co-occurrence with a
-// LITERAL of plausible credential length. Uses only AST APIs already
-// verified by the active eval-usage-detector (NAME.getNameIdentifier) and
-// set-roles-detector (NAME-anchored predicate); LITERAL.getValue() was
-// verified empirically during the Tier 2 round-trip.
-//
-// Reactivation gate: deploy this revision to dev265484, plant
-// `var password = 'Pa$$w0rd123!'` in a Script Include, run a scan, confirm
-// finding emitted on the planted line. Then flip `active: true` here AND
-// in manifest.json. Held at `active: false` until that PDI gate clears.
+// v1.1 reactivation criteria: rewrite the predicate to look for a NAME
+// node whose identifier matches /^(password|api_?key|secret|token)$/i
+// followed by an adjacent OP and LITERAL with a high-entropy string value,
+// OR adopt engine.getSource() regex scanning if that API proves stable.
+// Confirm via planted-artifact verification before re-activation.
 export const hardcodedCredentialsCheck = LinterCheck({
     $id: Now.ID['nowisor-hardcoded-credentials'],
     name: 'Hardcoded Credentials Detector',

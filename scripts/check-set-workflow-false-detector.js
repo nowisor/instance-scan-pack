@@ -31,6 +31,24 @@
 // Schema: v1 (finding emits ---NOWISOR_METADATA--- block parsed by advisor)
 // ES5-only (Instance Scan runtime constraint)
 ;(function setWorkflowFalseDetector(engine) {
+    // _resolveArtifact (A1-DEP) — see eval-usage-detector header comment for rationale.
+    function _resolveArtifact() {
+        var scope = ''
+        var tableName = ''
+        try {
+            if (engine && engine.finding && engine.finding.getValue) {
+                tableName = engine.finding.getValue('table') || engine.finding.getValue('table_name') || ''
+                var recId = engine.finding.getValue('record') || ''
+                if (tableName && recId) {
+                    var gr = new GlideRecord(tableName)
+                    if (gr.get(recId)) {
+                        scope = gr.getValue('sys_scope') || ''
+                    }
+                }
+            }
+        } catch (e) { /* best-effort */ }
+        return { artifact_scope: scope, artifact_table: tableName }
+    }
     var line_numbers = []
 
     engine.rootNode.visit(function (node) {
@@ -57,6 +75,7 @@
 
     if (line_numbers.length === 0) return
 
+    var _art = _resolveArtifact()
     var metadata = {
         nowisor_check_id: 'nowisor-set-workflow-false-detector',
         nowisor_check_version: '1.0.0',
@@ -69,6 +88,8 @@
         evidence: {
             line_numbers: line_numbers,
             occurrence_count: line_numbers.length,
+            artifact_scope: _art.artifact_scope,
+            artifact_table: _art.artifact_table,
         },
         severity: 1,
         remediation_id: 'sw-001',

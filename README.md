@@ -1,105 +1,37 @@
 # nowisor Instance Scan Agent
 
+> **This pack now lives at [github.com/nowisor/instance-scan-pack](https://github.com/nowisor/instance-scan-pack) as a public Apache-2.0 open-source repository.**
+>
+> The contents in this monorepo subdirectory are retained for build-time artifacts and historical reference. For installation, contribution, issue reporting, or release notes, please use the public repository.
+
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
 - **Pack version:** 1.0.0
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
+- **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
-- **Verified against:** ServiceNow Zurich Patch 6 (dev265484). Australia Patch 2 install fails — see [Compatibility](#compatibility); v1.1 reactivation work.
-- **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 (required for the install path; v1.1 is scoped to add a no-toolchain install option)
-- **Releases:** [github.com/nowisor/instance-scan-pack/releases](https://github.com/nowisor/instance-scan-pack/releases) — tagged build bundles published for verification and audit (see §Installation for what they are and aren't)
-
-## Quickstart
-
-If you have a Zurich Patch 6 PDI with Node 20+ and ~15 minutes:
-
-```bash
-git clone https://github.com/nowisor/instance-scan-pack
-cd instance-scan-pack
-npm install
-npx @servicenow/sdk auth --add https://your-instance.service-now.com --type basic --alias your-alias
-npx @servicenow/sdk build
-npx @servicenow/sdk install --auth your-alias
-```
-
-Then in your instance:
-
-1. **System Definition → Scripts - Background** — paste [`bootstrap/install-suite.js`](./bootstrap/install-suite.js), click Run.
-2. **Instance Scan → Suite Scans** — open "nowisor Instance Scan Pack", click Execute Suite Scan.
-3. **scan_finding.list** filtered by `check.sys_scope.scope = x_nowisor_isp` — your findings.
-
-> ⚠ **Password caveat (F-005):** if your PDI's auto-generated admin password contains `/` or `%`, `npx @servicenow/sdk auth --add` will fail with "username or password invalid" even though the credentials are correct. Reset the password via the developer portal to one within `[A-Za-z0-9!=._-]` before configuring the alias. See [`docs/qa/pdi-install-verification.md`](docs/qa/pdi-install-verification.md) for the full diagnosis.
-
-Detailed installation with explanations is in [Installation](#installation) below.
-
-## What it finds
-
-26 checks across four categories. Examples ordered by differentiation — LinterChecks and drift detection have no direct Security Center equivalent; property checks complement ISC's OWASP-aligned audits with NIS2 / DORA / ISO mapping:
-
-| Example finding | Type | Property / pattern | Frameworks | Severity |
-|---|---|---|---|---|
-| `eval()` in custom code | LinterCheck (AST) | AST-detected `eval()` call in Script Includes, Business Rules, etc. | NIS2 21.2.d · ISO 27001 A.8.28 · DORA 9 | CRITICAL |
-| OOB ACL modified in last 24h | Drift detection | Recently-modified out-of-the-box ACL (pre-attack signal) | NIS2 21.2.a · ISO 27001 A.8.3 | HIGH |
-| CSRF token enforcement disabled | Property | `glide.security.use_csrf_token = false` | NIS2 21.2.a · ISO 27001 A.5.15 · DORA 9 | CRITICAL |
-| Attachment role unrestricted | Property | `glide.attachment.role = public` (Zurich OOB default) | NIS2 21.2.h · ISO 27001 A.5.34 · DORA 9 | HIGH |
-| Session idle timeout exceeds baseline | Property | `glide.ui.session_timeout > 30 minutes` (Zurich default is 30; legacy clone chains often carry 90) | NIS2 21.2.j · ISO 27001 A.8.5 · DORA 9 | HIGH |
-
-The full check inventory is in [`manifest.json`](./manifest.json). Every check has a customer-facing documentation page at `nowisor.com/kb/checks/<check-id>` covering the attack-path narrative, regulatory mapping, remediation steps, and a verification Background Script.
-
-## What runs where, what's sent where
-
-- **The pack runs inside your ServiceNow instance.** It installs as a scoped application (`x_nowisor_isp`) and writes findings to your `scan_finding` table.
-- **No outbound traffic.** The pack does not phone home, does not send findings anywhere, and does not require outbound network access from your instance to function. Findings live in your instance and are visible to users with read access to `scan_finding`.
-- **Optional advisor integration is opt-in.** If you choose to connect your instance to the [nowisor advisor](https://nowisor.com) (the paid SaaS at the higher tiers of that product), the advisor reads your `scan_finding` records via an authenticated OAuth grant you authorize. That data flow is opt-in, scoped to the OAuth grant, documented in the advisor's terms of service. The agent itself remains independent of it.
-- **The agent is standalone-useful.** You can install this pack, run scans, and read findings without ever connecting to nowisor.com. The advisor is the value-add; the detection is the floor.
-
-See [`SECURITY.md`](./SECURITY.md) for the responsible-disclosure policy and the full scope of what this project commits to.
-
-## Sample finding output
-
-Every finding has a human-readable summary followed by a structured `---NOWISOR_METADATA---` JSON block. Here's what a typical CSRF finding looks like in the `scan_finding` table:
-
-```
-CSRF token enforcement is disabled. The platform does not validate CSRF tokens on
-state-changing requests, exposing authenticated sessions to cross-site request forgery.
-
-Current value: false. Expected: true.
-
----NOWISOR_METADATA---
-{
-  "nowisor_check_id": "nowisor-csrf-token-enforcement",
-  "nowisor_check_version": "1.0.0",
-  "nowisor_finding_schema": "v1",
-  "framework_mappings": {
-    "nis2": ["21.2.a"],
-    "iso27001": ["A.5.15"],
-    "dora": ["9"]
-  },
-  "evidence": {
-    "property_name": "glide.security.use_csrf_token",
-    "expected_value": "true",
-    "actual_value": "false"
-  },
-  "severity": 1,
-  "remediation_id": "csrf-001",
-  "attack_path_refs": ["AP-002"]
-}
-```
-
-The metadata block is the open schema any consumer can parse — the nowisor advisor at nowisor.com is one consumer, but you can build your own (export to SIEM, automate ticket creation, feed into a custom dashboard). See [Reading findings](#reading-findings) for the GlideRecord-based parsing pattern.
+- **Verified against:** ServiceNow Zurich Patch 6 (dev265484) and Australia Patch 2 (dev194572). On Australia the instance rejects the app as third-party until the pack's vendor key is trusted — one Background Script; see [Compatibility](#compatibility) / [Troubleshooting](#troubleshooting).
+- **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 to build and install from source (current 4.7.0; 4.4.0+ supports the Australia release). The installed app has no *runtime* SDK dependency, but every install path — including the pre-built package under `dist/` — uploads through the instance's app-client processor, which has its own server-side prerequisites (see [Troubleshooting → "Install fails — application was null"](#troubleshooting)).
 
 ## What this is
 
-The nowisor agent is the open-source sensor surface of the nowisor product. It runs as a scoped application (`x_nowisor_isp`) inside your ServiceNow instance. Each scan execution produces `scan_finding` records, each finding carrying both a human-readable description and a structured `---NOWISOR_METADATA---` JSON block parseable by external tooling — primarily the nowisor advisor at nowisor.com, but the schema is open and any consumer can parse it.
+The nowisor agent is the open-source **twin-sensor** surface of the nowisor product. It runs as a scoped application (`x_nowisor_isp`) inside your ServiceNow instance and emits two complementary streams, both consumed by the nowisor advisor's correlation engine:
 
-The agent ships with 26 checks across four categories:
+1. **Sensor surface #1 — config findings.** 27 scan checks emit `scan_finding` records carrying a human-readable description plus a structured `---NOWISOR_METADATA---` JSON block. These capture static security posture (properties, ACLs, code patterns).
+2. **Sensor surface #2 — log export.** A single Background Script (`tools/security-log-export.js`) emits a `---NOWISOR_LOGEXPORT---` envelope carrying runtime activity over a configurable lookback window (default 7 days): sys_audit on security-critical tables, sysevent discovery, syslog_transaction aggregated by user.
+
+The advisor binds the two streams: findings tell you what's misconfigured; the log export tells you which misconfigurations were actually exercised. This is the active-risk distinction. **No correlation logic ships in this pack** — that work lives in the closed-source advisor at nowisor.com. The pack is a pure sensor; consumers are free to ingest the schemas and run their own correlation.
+
+The 27 config checks span four categories:
 
 | Category | Count | What it audits |
 |---|---|---|
 | Platform property hardening | 8 | Security-relevant `glide.*` properties: CSRF, cookies, session timeout, MFA, REST anonymous access, external auth policy |
 | ACL and role configuration | 6 | Admin role concentration, inactive users retaining roles, attachment role restrictions, OOB ACL modifications, cross-scope privilege grants, elevated role co-assignments |
 | Code analysis (AST-based) | 8 | `eval()`, `setWorkflow(false)`, `GlideEvaluator`, `GlideRecord` vs `GlideRecordSecure`, `setRoles()`, hardcoded credentials, direct `sys_properties` writes, cross-domain Script Includes |
-| Cross-cutting | 4 | Update-set XML privilege-escalation patterns, fabricated property references, meta check coverage, platform build drift |
+| Cross-cutting | 5 | Update-set XML privilege-escalation patterns, fabricated property references, meta check coverage, platform build drift, **audit coverage gap (#27 — new in 1.0.1)** |
+
+The log export ships as `tools/security-log-export.js` — see §Running scans → Running the log export below.
 
 The full machine-readable inventory is in [`manifest.json`](./manifest.json).
 
@@ -115,7 +47,7 @@ This pack is **not** a replacement for ServiceNow Security Center or the platfor
 
 Install the pack via the ServiceNow Fluent SDK. The procedure is single-path: clone the repo, install dependencies, build, install. Both the SDK and Node 20+ are required.
 
-> Each tagged release publishes a build-output bundle on the [Releases page](https://github.com/nowisor/instance-scan-pack/releases) — `nowisor-agent-v<version>.tar.gz`, containing scope and per-record XMLs (a snapshot of what `now-sdk install` uploads to the instance). The same bundle is what `npx now-sdk build` produces locally at `dist/update-sets/` (gitignored, regenerated per build). The release artifact is **not** a standalone installer: the Fluent SDK accepts only a `--source` directory containing `package.json`, with no flag to consume a pre-built tarball, so the documented install path remains clone-source + `now-sdk install`. The release artifact is published for download-verification, audit, and diff purposes — verify the bundle a tag claims to ship matches what the source builds. A turnkey install path (single XML importable via *Retrieved Update Sets → Import Update Set from XML*) is on the v1.1 roadmap.
+> The artifact at `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is the build-output bundle (scope and per-record XMLs). It is **not** a standalone installer — it ships alongside the source for transparency and download-verification, not as a separate install path. A pure-UI install path that requires no local toolchain is on the v1.1 roadmap.
 
 ### Prerequisites
 
@@ -162,7 +94,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see 26 nowisor checks under the `x_nowisor_isp` scope — 24 active and 2 deferred (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per [`docs/retrospectives/V1_RETROSPECTIVE_TIER2.md`](docs/retrospectives/V1_RETROSPECTIVE_TIER2.md)).
+Navigate to **System Definition → Scan → Scan Checks**. You should see 27 nowisor checks under the `x_nowisor_isp` scope — 25 active and 2 deferred (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -183,6 +115,18 @@ Navigate to **Instance Scan → Suite Scans**, open the **nowisor Instance Scan 
 
 Navigate to **Instance Scan → Scheduled Scans**, create a new scheduled scan, set the suite to **nowisor Instance Scan Pack**, set the cadence (weekly is a reasonable default for production instances).
 
+### Running the log export
+
+`tools/security-log-export.js` is a Background Script (NOT part of the suite — it does not emit `scan_finding` records). Run it separately:
+
+1. Navigate to **System Definition → Scripts - Background**
+2. Open [`tools/security-log-export.js`](./tools/security-log-export.js)
+3. Paste the entire script into the editor
+4. Click **Run script**
+5. The script prints a JSON envelope under the `---NOWISOR_LOGEXPORT---` separator. Copy the full output for ingestion by the nowisor advisor.
+
+The script is **read-only and safe for production** — it queries audit / event / transaction tables only and does not write anywhere. The lookback window (`LOOKBACK_DAYS = 7`) and per-category row cap (`ROW_CAP = 300`) are configurable at the top of the script. Connect the log export to the advisor by pasting both the scan output and the log export into the **Active Risk Report** on nowisor.com.
+
 ## Reading findings
 
 Findings appear as records in the `scan_finding` table. Each finding has two layers:
@@ -190,24 +134,34 @@ Findings appear as records in the `scan_finding` table. Each finding has two lay
 1. **Human-readable description** at the top of `finding_details`
 2. **Structured metadata** below a `---NOWISOR_METADATA---` separator
 
-A complete sample finding is shown in [Sample finding output](#sample-finding-output) above. The metadata block is stable schema v1; the parsing pattern below extracts it programmatically.
-
-### Compliance rollup ("where's my NIS2 / DORA / ISO mapping?")
-
-Inside the standard ServiceNow Instance Scan UI, the framework mapping is **not visible as a column or facet** — it lives inside the JSON metadata block in `finding_details` (this is a design choice driven by `scan_finding` having no structured-metadata columns; adding custom columns would force a schema modification on the customer's instance).
-
-To roll up findings by framework, paste [`tools/compliance-rollup.js`](./tools/compliance-rollup.js) into **System Definition → Scripts - Background** and click Run. It prints a per-framework breakdown like:
+Example finding text:
 
 ```
-NIS2 (4 article(s) cited)
-  21.2.a: 7 finding(s) [CRITICAL=2, HIGH=4, MEDIUM=1]
-    checks: nowisor-csrf-token-enforcement, nowisor-oob-acl-modifications, ...
-  21.2.d: 12 finding(s) [CRITICAL=1, HIGH=11]
-    checks: nowisor-eval-usage-detector, nowisor-glide-evaluator-detector, ...
-  ...
-```
+CSRF token enforcement is disabled. The platform does not validate CSRF tokens on
+state-changing requests, exposing authenticated sessions to cross-site request forgery.
 
-For CISO-language explanation of each article and finding-by-finding remediation, the [nowisor advisor](https://nowisor.com) at the higher tiers consumes these findings and renders the compliance grouping natively.
+Current value: false. Expected: true.
+
+---NOWISOR_METADATA---
+{
+  "nowisor_check_id": "nowisor-csrf-token-enforcement",
+  "nowisor_check_version": "1.0.0",
+  "nowisor_finding_schema": "v1",
+  "framework_mappings": {
+    "nis2": ["21.2.a"],
+    "iso27001": ["A.5.15"],
+    "dora": ["9"]
+  },
+  "evidence": {
+    "property_name": "glide.security.use_csrf_token",
+    "expected_value": "true",
+    "actual_value": "false"
+  },
+  "severity": 1,
+  "remediation_id": "csrf-001",
+  "attack_path_refs": ["AP-002"]
+}
+```
 
 To parse all nowisor findings programmatically:
 
@@ -247,6 +201,65 @@ attack_path_refs          array of strings — AP-XXX nowisor KB identifiers; ma
 
 The `---NOWISOR_METADATA---` separator is exact. Consumers parse by splitting on this string.
 
+### LinterCheck-required evidence keys (A1-DEP, added in 1.0.1)
+
+LinterCheck findings (check IDs `nowisor-eval-usage-detector`, `nowisor-set-workflow-false-detector`, `nowisor-glide-evaluator-detector`, `nowisor-glide-record-vs-secure`, `nowisor-set-roles-detector`, `nowisor-hardcoded-credentials`, `nowisor-direct-property-write`, `nowisor-domain-separation-script-include`) emit two additional keys inside `evidence`:
+
+```
+artifact_scope            string — sys_scope of the flagged record (e.g., 'global', 'sn_*', 'x_*')
+artifact_table            string — table the flagged record lives on (e.g., 'sys_script_include')
+```
+
+These are mandatory for downstream correlation: without them, a correlation engine cannot distinguish OOB/system-scope findings (deferrable) from customer-modifiable findings (live risk). The fields may be empty strings on instances where the framework does not pre-populate `scan_finding.table` and `scan_finding.record` at script-execution time — consumers should treat empty values as "scope unknown" and route those findings to `INVESTIGATE` rather than `NOISE`. Property-based and ACL/role checks do NOT carry these keys (their `evidence` is property- or ACL-shaped).
+
+### Log-export schema v1
+
+The companion log-export envelope (emitted by `tools/security-log-export.js`) follows the same `---NOWISOR_<KIND>---` separator pattern as findings. Single envelope per script execution:
+
+```jsonc
+{
+  "nowisor_logexport_schema": "v1",
+  "pack_version": "1.0.0",
+  "generated_at": "<ISO UTC>",
+
+  "window": {
+    "lookback_days": 7,
+    "start": "<ISO>", "end": "<ISO>",
+    "per_category_cap": 300
+  },
+
+  "coverage": {
+    "sources_expected":  ["sys_audit", "sysevent", "syslog_transaction"],
+    "sources_available": [],
+    "sources_missing":   [],
+    "coverage_note":     "<human-readable; correlation engines render this verbatim>"
+  },
+
+  "build_drift": {
+    "buildtag_last": "<gs.getProperty('glide.buildtag.last')>",  // may be null on instances where the property is unset
+    "lastplugin":    "<gs.getProperty('glide.lastplugin')>",
+    "recent_property_changes_30d": 0
+  },
+
+  "sources": {
+    "sys_audit":          { "schema_note": "...", "row_count": N, "cap_hit": false, "filter": "...", "rows": [...] },
+    "sysevent":           { "discovery": { "method": "...", "tables_present": [...] }, "row_count": N, "rows": [...] },
+    "syslog_transaction": { "schema_note": "...", "aggregation": "group_by_user_top_25", "row_count": N, "rows": [...] }
+  }
+}
+```
+
+**L2-reserved keys** (NOT emitted in v1; parsers must ignore unknown keys for forward-compat). When v1.1 lands after PDI verification, these will appear inside rows[]:
+- `source_ip` — verified on `syslog_transaction.remote_ip`; pending corpus update
+- `user_agent` — verified on `syslog_transaction.user_agent`; pending corpus update
+- `owning_job` — derived from sys_audit join when property toggles trace to a scheduled job
+- `anonymous_principal_volume` — aggregate signal for guest/anonymous transactions
+
+**L1.1-reserved key** (NOT emitted in v1; needed for runtime-non-execution claims on linter findings):
+- `script_exec_history` — per-script execution counts. Without it, linter-finding deferral rationale rests on artifact_scope (static), never on runtime non-execution.
+
+Same backwards-compat policy as the finding schema (current + previous, 12 months). Parsers must split on the exact `---NOWISOR_LOGEXPORT---` string and `JSON.parse` the tail.
+
 ### Check IDs and versioning
 
 Check IDs are **immutable**. If a check's logic changes incompatibly, the pack ships a NEW $id and the old $id is deprecated (kept as `active: false`) for one minor-version cycle, then removed.
@@ -264,7 +277,7 @@ npx now-sdk install --auth your-alias --reinstall
 # Background Script → paste bootstrap/install-suite.js → Run
 ```
 
-A single-XML update-set upgrade path (download from Releases, import via *Retrieved Update Sets*) is v1.1 work and tracked in the [v1.1 backlog](./V1_PUBLIC_REPO_RETROSPECTIVE.md#v11-backlog-carried-forward-from-this-sprint).
+Or via update set: download the new XML from `dist/update-sets/`, import, preview, commit, re-run bootstrap.
 
 Existing `scan_finding` records persist (FK is preserved against deterministic check sys_ids).
 
@@ -304,34 +317,58 @@ Either:
 
 The JSON should be valid JSON-parseable text after the `---NOWISOR_METADATA---` separator. If it's not, you may be looking at an old finding from a pre-v1 pilot. Re-run the suite after updating to v1.0.0; new findings will use the v1 schema.
 
+### "Install fails — `sn_appclient_upload_processor.do` returns 'application was null'"
+
+The package uploads but the instance's app-client handler deserializes it to a null application:
+
+```
+java.lang.IllegalStateException at
+com.sn_appclient_bootstrap.ScopedAppUploadProcessor.uploadAndInstallApp(ScopedAppUploadProcessor.java:251)
+```
+
+This is an **instance-side install policy, not a defect in the build** — the same v1.0.0 package installs on Zurich Patch 6 (`dev265484`) and failed on Australia Patch 2. **Verified root cause and fix** (reproduced + resolved on Australia Patch 2 `dev194572`, 2026-05-31):
+
+The instance rejects the app as **third party**. The real signal is the `syslog` line *immediately before* the null-application error:
+
+```
+ServletErrorListener: Not allowing install of third party application: no thrown error
+ServletErrorListener: Unable to install application as application was null ... ScopedAppUploadProcessor:251
+```
+
+The upload processor trusts only company keys listed in the **`sn_appauthor.all_company_keys`** property. On a fresh PDI that contains only the instance's own key (e.g. `2064919`). The pack's vendor key — the company segment of its scope `x_nowisor_isp`, i.e. **`nowisor`** — isn't trusted, so the app deserializes to null.
+
+**Fix:** add the pack's vendor key to the trust list via a Background Script (REST writes to `sys_properties` are ACL-blocked on most PDIs — this must run server-side):
+
+```javascript
+// System Definition → Scripts - Background
+var cur = gs.getProperty('sn_appauthor.all_company_keys', '');
+if (cur.split(',').indexOf('nowisor') === -1) {
+    gs.setProperty('sn_appauthor.all_company_keys', (cur ? cur + ',' : '') + 'nowisor');
+}
+gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
+```
+
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with all 27 checks. Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+
+If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
+
 ## Compatibility
 
-### Verified targets
-
-| Release | Verified PDI | Status |
+| Release | Verified | Status |
 |---|---|---|
 | Zurich Patch 6 | dev265484 | Fully verified — property baseline complete; 24/24 verification Background Scripts pass on a live instance |
-| Australia Patch 2 | dev377226 | **Install fails** — `sn_appclient_upload_processor.do` returns `application was null` on the v1.0.0 build. Root cause not yet investigated. Tracked as v1.1 reactivation work. |
+| Australia Patch 2 | dev194572 | **Verified end-to-end** — v1.0.0 installs cleanly (scope + 27 checks, 25 active / 2 deferred) after trusting the pack's vendor key in `sn_appauthor.all_company_keys`; see [Troubleshooting → "application was null"](#troubleshooting). Suite bootstrap + a live suite scan validated: 144 findings emitted under `x_nowisor_isp` with the intact `---NOWISOR_METADATA---` v1 schema (advisor-integration contract holds). The third-party rejection is a per-instance policy, not a build issue. Verified 2026-05-31. |
 | Older releases (Yokohama, Xanadu, Washington DC) | not verified | Likely works but unverified; file an issue if you test |
 
-### Behavior on other releases and patches
+### Pending PDI verification (gates v1.1)
 
-The pack ships a **verified property baseline** (`nowisor/verified_schema/releases/zurich/properties/all_properties_zurich_patch6.json`) that captures property names, types, and OOB values from Zurich Patch 6. On any other release or patch, four failure modes are possible — knowing which mode applies to which check lets you self-triage findings:
-
-| Failure mode | Affects | Resilience on patch drift (same release) | Resilience on release drift |
+| Identifier | Source | Status | Blocks |
 |---|---|---|---|
-| **Property name renamed / removed** | Property checks | Stable within a release; very rare across patches | Possible — a property may be split, renamed, or absorbed into a plugin between releases |
-| **OOB default changed in a security patch** | Property checks that compare to OOB | Possible; this is exactly what hardening patches do | Common (e.g., `glide.ui.session_timeout` went from 90 in legacy releases to 30 in Zurich) |
-| **OOB ACL set changed** | `nowisor-oob-acl-modifications` (drift detection) | Likely — security patches routinely ship new/modified OOB ACLs | Certain — every release ships ACL changes |
-| **AST surface (tables scanned, plugin presence)** | LinterChecks | Stable | Possible — table moves, new scopes, plugin-gated tables |
-
-**Patch-resilient by design.** Property checks in this pack encode the *security expectation* (e.g., session timeout ≤ 30 minutes), not "differs from OOB default" — so a patch that changes the OOB default does not produce a false positive. AST-based LinterChecks operate on JavaScript syntax (`eval()`, `setWorkflow(false)`, etc.) and are stable across patches and releases for any check whose target tables still exist.
-
-**Patch-sensitive.** `nowisor-oob-acl-modifications` is the one check whose semantics depend directly on the OOB baseline. On an instance whose patch differs from the verified baseline, the check will flag patch-introduced ACL changes as drift. Treat these as informational on first scan and tune the comparison once you've reconciled the baseline.
-
-**v1.1 roadmap.** Per-release baselines at patch granularity under `nowisor/verified_schema/releases/<release>/<patch>/`, with runtime detection of the instance's release+patch via `glide.buildtag` so checks load the matching baseline. Until that lands, the pack assumes Zurich Patch 6 semantics for OOB comparisons and reports the running build at scan time so findings can be interpreted against the right baseline.
-
-### Cross-scope privilege records
+| `syslog_transaction.remote_ip` | log-export L2 column | Present on Zurich manifest, missing from per-table verified corpus | TEST verdict in correlation engine |
+| `syslog_transaction.user_agent` | log-export L2 column | Present on Zurich manifest, missing from per-table verified corpus | TEST verdict in correlation engine |
+| `sys_audit.{tablename,documentkey,fieldname,oldvalue,newvalue,sys_created_by,sys_created_on}` | log-export L1 column set | Empty `fields: []` stub in `verified_schema/releases/zurich/tables/sys_audit.json` | Full-confidence sys_audit join in correlation engine |
+| `glide.buildtag.last` | build_drift block | Unverified | When unverified, the tool emits `null` for this field — drift signal degraded but non-fatal |
+| `sysevent` (canonical event log table) | log-export L1 source | Not present in verified schema (`sysevent_register` + `sysevent_email_action` only) | EXERCISED verdict for auth-failure findings |
 
 The 17 `CrossScopePrivilege` records ship with the pack so it functions correctly even in instances with strict scope isolation. The pack does not require admin elevation; the executing user needs read on `scan_finding`, `scan_check_*`, and the in-scope tables the audit checks touch (audit of sys_user, sys_security_acl, sys_script_include, etc.).
 
@@ -339,7 +376,7 @@ The 17 `CrossScopePrivilege` records ship with the pack so it functions correctl
 
 - **Issues / proposed checks:** [github.com/nowisor-com/instance-scan-agent/issues](https://github.com/nowisor-com/instance-scan-agent/issues) (replace with your fork URL if not from upstream)
 - **Property-name verification rule:** every `glide.*` property referenced must exist on a verified PDI. The pack ships with a verified baseline at `nowisor/verified_schema/releases/zurich/properties/all_properties_zurich_patch6.json` (3,585 properties). Pull requests that reference unverified property names will not be merged.
-- **AST predicate verification:** every LinterCheck predicate must be verified against a planted test artifact before the check is enabled. Pilot procedure documented in [`docs/retrospectives/V0_2_RETROSPECTIVE.md`](docs/retrospectives/V0_2_RETROSPECTIVE.md).
+- **AST predicate verification:** every LinterCheck predicate must be verified against a planted test artifact before the check is enabled. Pilot procedure documented in `V0_2_RETROSPECTIVE.md`.
 
 ## License
 
