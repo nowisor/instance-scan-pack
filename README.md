@@ -54,6 +54,7 @@ Install the pack via the ServiceNow Fluent SDK. The procedure is single-path: cl
 - Node.js 20 or higher
 - `@servicenow/sdk` 4.6.0 or higher
 - Admin credentials on the target ServiceNow instance (Zurich Patch 6 verified; other releases see [Compatibility](#compatibility))
+- For passwordless **OAuth** auth (Step 2), the instance needs ServiceNow IDE 1.1+ (default on Zurich). On older releases, use basic auth or import the ServiceNow IDE XML.
 
 ### Step 1 — Clone the source
 
@@ -65,11 +66,38 @@ npm install
 
 ### Step 2 — Configure auth
 
+Authenticate with **OAuth** (recommended). A browser opens, you log in to your existing instance
+session, click **Accept**, and paste the one-time authorization code — **no password is typed into the
+terminal**, and no long-lived password is stored:
+
+```bash
+npx now-sdk auth --add https://yourinstance.service-now.com --type oauth --alias your-alias
+```
+
+OAuth needs ServiceNow IDE 1.1+ on the instance (default on Zurich — see [Prerequisites](#prerequisites)).
+The alias is stored in your OS keychain and reused by `build`/`install`. One alias per target instance;
+`now-sdk auth --list` shows aliases (never passwords or codes).
+
+<details><summary>Basic auth (fallback) and non-interactive CI/CD</summary>
+
+Basic auth prompts for the admin username and password:
+
 ```bash
 npx now-sdk auth --add https://yourinstance.service-now.com --type basic --alias your-alias
 ```
 
-The auth alias is stored in your local SDK config (credentials live in your OS keychain). One alias per target instance.
+For **non-interactive CI/CD**, skip `auth` and let `install` read these environment variables (store the
+password as a CI secret — it is never typed at a prompt):
+
+```bash
+export SN_SDK_INSTANCE_URL=https://yourinstance.service-now.com
+export SN_SDK_USER=svc.nowisor_deploy
+export SN_SDK_USER_PWD=********            # CI secret
+export SN_SDK_NODE_ENV=SN_SDK_CI_INSTALL
+npx now-sdk build && npx now-sdk install
+```
+
+</details>
 
 ### Step 3 — Build and install
 
@@ -92,6 +120,8 @@ The Fluent SDK 4.6.0 does not expose a `ScanCheckSuite` API. The suite that aggr
 
 The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`now-sdk install --reinstall`), the m2m rows are cascade-deleted — re-run the bootstrap to re-link them. `scan_finding` records persist across reinstalls.
 
+> **Passwordless note:** with OAuth (Step 2), auth + `build`/`install` and triggering scans (below) need no terminal password. This bootstrap is the one remaining step that needs a logged-in admin **browser session** to run the Background Script — Fluent SDK 4.6.0 exposes no `ScanCheckSuite` API (suite-on-install is on the v1.1 roadmap).
+
 ### Step 5 — Verify
 
 Navigate to **System Definition → Scan → Scan Checks**. You should see 27 nowisor checks under the `x_nowisor_isp` scope — 25 active and 2 deferred (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
@@ -100,12 +130,21 @@ Navigate to **System Definition → Scan → Scan Checks**. You should see 27 no
 
 ### Ad-hoc via REST
 
+With an **OAuth bearer token** (no password) — recommended; use a token for a dedicated scan user or OAuth client:
+
+```bash
+curl -H "Authorization: Bearer $SN_TOKEN" -H 'Accept: application/json' \
+  -X POST 'https://yourinstance.service-now.com/api/sn_cicd/instance_scan/full_scan'
+```
+
+Or with basic auth:
+
 ```bash
 curl -u admin:$SN_PASS -H 'Accept: application/json' \
   -X POST 'https://yourinstance.service-now.com/api/sn_cicd/instance_scan/full_scan'
 ```
 
-Returns a progress URL. Poll until status is `Successful`. Findings appear in the `scan_finding` table filtered by `check.sys_scope.scope=x_nowisor_isp`.
+Returns a progress URL. Poll until status is `Successful`. Findings appear in the `scan_finding` table filtered by `check.sys_scope.scope=x_nowisor_isp`. The **UI**, **Scheduled Scans**, and the **nowisor advisor** paths below need no password at all.
 
 ### Ad-hoc via UI
 
