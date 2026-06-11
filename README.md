@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.0.0
+- **Pack version:** 1.1.0
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -17,12 +17,12 @@ Open-source ServiceNow security check pack that runs inside your instance and pr
 
 The nowisor agent is the open-source **twin-sensor** surface of the nowisor product. It runs as a scoped application (`x_nowisor_isp`) inside your ServiceNow instance and emits two complementary streams, both consumed by the nowisor advisor's correlation engine:
 
-1. **Sensor surface #1 — config findings.** 27 scan checks emit `scan_finding` records carrying a human-readable description plus a structured `---NOWISOR_METADATA---` JSON block. These capture static security posture (properties, ACLs, code patterns).
+1. **Sensor surface #1 — config findings.** 32 scan checks emit `scan_finding` records carrying a human-readable description plus a structured `---NOWISOR_METADATA---` JSON block. These capture static security posture (properties, ACLs, code patterns).
 2. **Sensor surface #2 — log export.** A single Background Script (`tools/security-log-export.js`) emits a `---NOWISOR_LOGEXPORT---` envelope carrying runtime activity over a configurable lookback window (default 7 days): sys_audit on security-critical tables, sysevent discovery, syslog_transaction aggregated by user.
 
 The advisor binds the two streams: findings tell you what's misconfigured; the log export tells you which misconfigurations were actually exercised. This is the active-risk distinction. **No correlation logic ships in this pack** — that work lives in the closed-source advisor at nowisor.com. The pack is a pure sensor; consumers are free to ingest the schemas and run their own correlation.
 
-The 27 config checks span four categories:
+The 32 config checks span five categories:
 
 | Category | Count | What it audits |
 |---|---|---|
@@ -30,6 +30,7 @@ The 27 config checks span four categories:
 | ACL and role configuration | 6 | Admin role concentration, inactive users retaining roles, attachment role restrictions, OOB ACL modifications, cross-scope privilege grants, elevated role co-assignments |
 | Code analysis (AST-based) | 8 | `eval()`, `setWorkflow(false)`, `GlideEvaluator`, `GlideRecord` vs `GlideRecordSecure`, `setRoles()`, hardcoded credentials, direct `sys_properties` writes, cross-domain Script Includes |
 | Cross-cutting | 5 | Update-set XML privilege-escalation patterns, fabricated property references, meta check coverage, platform build drift, **audit coverage gap (#27 — new in 1.0.1)** |
+| Basic Auth API restriction | 5 | **New in 1.1.0.** Readiness for the ServiceNow Basic Auth API restriction rollout (KB3025707/KB3055080): tracking active, enforcement posture + days-remaining countdown, untriaged hybrid accounts (`sys_user_basic_auth_exception`), allow-list role granted without WSAO (MFA bypass), and dormant Basic Auth API accounts |
 
 The log export ships as `tools/security-log-export.js` — see §Running scans → Running the log export below.
 
@@ -307,6 +308,14 @@ Pack versions follow semver:
 - Patch (1.0.x): bug fixes in check scripts; no schema changes
 - Minor (1.x.0): new checks, evidence-schema additions; no breaking changes to schema fields
 - Major (x.0.0): finding schema breaking change (bumps `nowisor_finding_schema`); backwards-compat window: current + previous, 12 months
+
+### Changelog
+
+**1.1.0 (2026-06-11)** — Added the **Basic Auth API restriction** check group (5 checks, `nowisor-basic-auth-*`) for the ServiceNow Basic Auth restriction rollout (KB3025707/KB3055080): restriction-tracking-active, enforcement-posture (with days-remaining countdown), hybrid-accounts-undecided (`sys_user_basic_auth_exception`), role-without-WSAO (MFA-bypass), and dormant-API-accounts. All identifiers (4 `glide.authenticate.basic_auth.restriction.*` properties, the allow-list properties, the `snc_basic_auth_api_access` role, and the `sys_user_basic_auth_exception` table + fields + `decision` choices) verified read-only on Zurich Patch 6 `dev265147`, 2026-06-11. Ships a cross-scope read privilege for `sys_user_basic_auth_exception`. Total checks 27 → 32.
+
+**1.0.1** — Added the audit-coverage-gap check (#27) and LinterCheck A1-DEP evidence keys.
+
+**1.0.0** — Initial public release: 26 checks + the log-export twin sensor.
 
 ## Upgrading
 

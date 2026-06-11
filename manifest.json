@@ -1,12 +1,18 @@
 {
   "pack_name": "nowisor-instance-scan-agent",
-  "pack_version": "1.0.0",
+  "pack_version": "1.1.0",
   "finding_schema_version": "v1",
   "logexport_schema_version": "v1",
-  "release_date": "2026-05-11",
+  "release_date": "2026-06-11",
   "released_against": {
-    "servicenow_releases": ["zurich", "australia"],
-    "verified_on": ["dev265484"]
+    "servicenow_releases": [
+      "zurich",
+      "australia"
+    ],
+    "verified_on": [
+      "dev265484",
+      "dev265147"
+    ]
   },
   "checks": [
     {
@@ -18,11 +24,19 @@
       "name": "CSRF Token Enforcement",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-csrf-token-enforcement",
       "framework_mappings": {
-        "nis2": ["21.2.a"],
-        "iso27001": ["A.5.15"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.a"
+        ],
+        "iso27001": [
+          "A.5.15"
+        ],
+        "dora": [
+          "9"
+        ]
       },
-      "attack_path_refs": ["AP-002"],
+      "attack_path_refs": [
+        "AP-002"
+      ],
       "global_scope_tables_read": [],
       "active": true
     },
@@ -35,9 +49,15 @@
       "name": "Session Idle Timeout",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-session-timeout",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.8.5"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.8.5"
+        ],
+        "dora": [
+          "9"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -52,9 +72,15 @@
       "name": "Cookie HttpOnly Enforcement",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-cookie-http-only",
       "framework_mappings": {
-        "nis2": ["21.2.e"],
-        "iso27001": ["A.8.23"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.e"
+        ],
+        "iso27001": [
+          "A.8.23"
+        ],
+        "dora": [
+          "9"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -69,9 +95,15 @@
       "name": "Cookie Secure Flag Enforcement",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-cookie-secure",
       "framework_mappings": {
-        "nis2": ["21.2.e"],
-        "iso27001": ["A.8.23"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.e"
+        ],
+        "iso27001": [
+          "A.8.23"
+        ],
+        "dora": [
+          "9"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -86,8 +118,12 @@
       "name": "Secure Cookies UI Property",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-secure-cookies",
       "framework_mappings": {
-        "nis2": ["21.2.e"],
-        "iso27001": ["A.8.23"]
+        "nis2": [
+          "21.2.e"
+        ],
+        "iso27001": [
+          "A.8.23"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -102,9 +138,15 @@
       "name": "REST Anonymous Access Audit",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-rest-anonymous-access",
       "framework_mappings": {
-        "nis2": ["21.2.d"],
-        "iso27001": ["A.5.16"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.d"
+        ],
+        "iso27001": [
+          "A.5.16"
+        ],
+        "dora": [
+          "9"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -128,9 +170,15 @@
       "name": "MFA Enforcement",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-mfa-enforcement",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.5.17"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.17"
+        ],
+        "dora": [
+          "9"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -145,8 +193,12 @@
       "name": "External Auth — Disable Local Login",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-external-auth-policy",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.5.16"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.16"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -161,11 +213,19 @@
       "name": "Admin Role Concentration",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-admin-role-concentration",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.5.18", "A.8.2"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.18",
+          "A.8.2"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_user", "sys_user_has_role"],
+      "global_scope_tables_read": [
+        "sys_user",
+        "sys_user_has_role"
+      ],
       "active": true
     },
     {
@@ -177,11 +237,18 @@
       "name": "Inactive Users Retaining Roles",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-inactive-users-with-roles",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.5.18"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.18"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_user", "sys_user_has_role"],
+      "global_scope_tables_read": [
+        "sys_user",
+        "sys_user_has_role"
+      ],
       "active": true
     },
     {
@@ -193,9 +260,15 @@
       "name": "Attachment Role Restriction",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-attachment-role-restriction",
       "framework_mappings": {
-        "nis2": ["21.2.h"],
-        "iso27001": ["A.5.34"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.h"
+        ],
+        "iso27001": [
+          "A.5.34"
+        ],
+        "dora": [
+          "9"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -210,11 +283,17 @@
       "name": "OOB ACL Modifications",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-oob-acl-modifications",
       "framework_mappings": {
-        "nis2": ["21.2.a"],
-        "iso27001": ["A.8.3"]
+        "nis2": [
+          "21.2.a"
+        ],
+        "iso27001": [
+          "A.8.3"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_security_acl"],
+      "global_scope_tables_read": [
+        "sys_security_acl"
+      ],
       "active": true
     },
     {
@@ -226,11 +305,18 @@
       "name": "Cross-Scope Privilege Grants",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-cross-scope-privilege-grants",
       "framework_mappings": {
-        "nis2": ["21.2.a"],
-        "iso27001": ["A.8.3"]
+        "nis2": [
+          "21.2.a"
+        ],
+        "iso27001": [
+          "A.8.3"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_scope_privilege", "sys_scope"],
+      "global_scope_tables_read": [
+        "sys_scope_privilege",
+        "sys_scope"
+      ],
       "active": true
     },
     {
@@ -242,11 +328,19 @@
       "name": "Elevated Role Co-Assignments",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-elevated-role-assignments",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.5.18"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.18"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_user", "sys_user_has_role", "sys_user_role"],
+      "global_scope_tables_read": [
+        "sys_user",
+        "sys_user_has_role",
+        "sys_user_role"
+      ],
       "active": true
     },
     {
@@ -258,12 +352,24 @@
       "name": "eval() Usage Detector",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-eval-usage-detector",
       "framework_mappings": {
-        "nis2": ["21.2.d"],
-        "iso27001": ["A.8.28"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.d"
+        ],
+        "iso27001": [
+          "A.8.28"
+        ],
+        "dora": [
+          "9"
+        ]
       },
-      "attack_path_refs": ["AP-007"],
-      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "attack_path_refs": [
+        "AP-007"
+      ],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script",
+        "sys_ui_action"
+      ],
       "active": true
     },
     {
@@ -275,12 +381,24 @@
       "name": "setWorkflow(false) Detector",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-set-workflow-false-detector",
       "framework_mappings": {
-        "nis2": ["21.2.f"],
-        "iso27001": ["A.8.15"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.f"
+        ],
+        "iso27001": [
+          "A.8.15"
+        ],
+        "dora": [
+          "9"
+        ]
       },
-      "attack_path_refs": ["AP-007"],
-      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "attack_path_refs": [
+        "AP-007"
+      ],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script",
+        "sys_ui_action"
+      ],
       "active": true
     },
     {
@@ -292,11 +410,19 @@
       "name": "GlideEvaluator Dynamic Evaluation Detector",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-glide-evaluator-detector",
       "framework_mappings": {
-        "nis2": ["21.2.d"],
-        "iso27001": ["A.8.28"]
+        "nis2": [
+          "21.2.d"
+        ],
+        "iso27001": [
+          "A.8.28"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script",
+        "sys_ui_action"
+      ],
       "active": true
     },
     {
@@ -308,11 +434,18 @@
       "name": "GlideRecord vs GlideRecordSecure",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-glide-record-vs-secure",
       "framework_mappings": {
-        "nis2": ["21.2.h"],
-        "iso27001": ["A.8.3"]
+        "nis2": [
+          "21.2.h"
+        ],
+        "iso27001": [
+          "A.8.3"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_script_include", "sys_script"],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script"
+      ],
       "active": true
     },
     {
@@ -324,11 +457,19 @@
       "name": "setRoles() Escalation Detector",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-set-roles-detector",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.5.18"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.18"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script",
+        "sys_ui_action"
+      ],
       "active": true
     },
     {
@@ -340,12 +481,22 @@
       "name": "Hardcoded Credentials Detector",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-hardcoded-credentials",
       "framework_mappings": {
-        "nis2": ["21.2.i"],
-        "iso27001": ["A.8.5"],
-        "dora": ["9"]
+        "nis2": [
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.8.5"
+        ],
+        "dora": [
+          "9"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_ui_action"],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script",
+        "sys_ui_action"
+      ],
       "active": false,
       "deferred_to": "v1.1",
       "deferred_reason": "Tier 2 planted-artifact validation produced zero findings: predicate regex-matches LITERAL node value, but AST splits 'var password = ...' into NAME + OP + LITERAL nodes — LITERAL value alone never contains the labelled-assignment shape. v1.1 reactivation: rewrite predicate to combine NAME (identifier matching password/api_key/secret/token) with adjacent LITERAL value, OR adopt engine.getSource() regex if API proves stable."
@@ -359,11 +510,18 @@
       "name": "Direct sys_properties Write Detector",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-direct-property-write",
       "framework_mappings": {
-        "nis2": ["21.2.a"],
-        "iso27001": ["A.8.9"]
+        "nis2": [
+          "21.2.a"
+        ],
+        "iso27001": [
+          "A.8.9"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_script_include", "sys_script"],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script"
+      ],
       "active": false,
       "deferred_to": "v1.1",
       "deferred_reason": "Tier 2 planted-artifact validation produced zero findings against `new GlideRecord('sys_properties')`. Either LITERAL.getValue() API behavior differs from assumption, or GlideRecord constructor argument AST shape needs different anchor (e.g., CALL of .update()/.insert() on GlideRecord whose first arg is 'sys_properties'). v1.1 reactivation: ship a diagnostic LinterCheck that dumps node-type tree around table-name literals, redesign predicate accordingly."
@@ -377,12 +535,20 @@
       "name": "Cross-Domain Script Include Reference",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-domain-separation-script-include",
       "framework_mappings": {
-        "nis2": ["21.2.j"],
-        "iso27001": ["A.5.31"],
-        "gdpr": ["32"]
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.31"
+        ],
+        "gdpr": [
+          "32"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_script_include"],
+      "global_scope_tables_read": [
+        "sys_script_include"
+      ],
       "active": true
     },
     {
@@ -394,11 +560,17 @@
       "name": "Suspicious Update Set XML",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-update-set-xml-suspicious",
       "framework_mappings": {
-        "nis2": ["21.2.f"],
-        "iso27001": ["A.8.32"]
+        "nis2": [
+          "21.2.f"
+        ],
+        "iso27001": [
+          "A.8.32"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_update_xml"],
+      "global_scope_tables_read": [
+        "sys_update_xml"
+      ],
       "active": true
     },
     {
@@ -410,11 +582,19 @@
       "name": "Fabricated Property References",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-fabricated-property-references",
       "framework_mappings": {
-        "nis2": ["21.2.a"],
-        "iso27001": ["A.8.9"]
+        "nis2": [
+          "21.2.a"
+        ],
+        "iso27001": [
+          "A.8.9"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_script_include", "sys_script", "sys_properties"],
+      "global_scope_tables_read": [
+        "sys_script_include",
+        "sys_script",
+        "sys_properties"
+      ],
       "active": true
     },
     {
@@ -439,8 +619,12 @@
       "name": "Platform Build Drift",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-platform-build-drift",
       "framework_mappings": {
-        "nis2": ["21.2.a"],
-        "iso27001": ["A.8.32"]
+        "nis2": [
+          "21.2.a"
+        ],
+        "iso27001": [
+          "A.8.32"
+        ]
       },
       "attack_path_refs": [],
       "global_scope_tables_read": [],
@@ -455,12 +639,150 @@
       "name": "Audit Coverage Gap",
       "kb_url": "https://nowisor.com/kb/checks/nowisor-audit-coverage-gap",
       "framework_mappings": {
-        "nis2": ["21.2.b"],
-        "iso27001": ["A.8.15", "A.8.16"],
-        "dora": ["10"]
+        "nis2": [
+          "21.2.b"
+        ],
+        "iso27001": [
+          "A.8.15",
+          "A.8.16"
+        ],
+        "dora": [
+          "10"
+        ]
       },
       "attack_path_refs": [],
-      "global_scope_tables_read": ["sys_dictionary"],
+      "global_scope_tables_read": [
+        "sys_dictionary"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-basic-auth-restriction-inactive",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Basic Auth Restriction Tracking Active",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-basic-auth-restriction-inactive",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.8.5"
+        ],
+        "dora": [
+          "9"
+        ]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-basic-auth-enforcement-posture",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Basic Auth Enforcement Posture",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-basic-auth-enforcement-posture",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.8.5"
+        ],
+        "dora": [
+          "9"
+        ]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [],
+      "active": true
+    },
+    {
+      "id": "nowisor-basic-auth-hybrid-undecided",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Basic Auth Hybrid Accounts Undecided",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-basic-auth-hybrid-undecided",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.i",
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.8.5"
+        ],
+        "dora": [
+          "9"
+        ]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [
+        "sys_user_basic_auth_exception"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-basic-auth-role-without-wsao",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Basic Auth Role Without WSAO",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-basic-auth-role-without-wsao",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.i",
+          "21.2.j"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.8.5"
+        ],
+        "dora": [
+          "9"
+        ]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [
+        "sys_user_has_role",
+        "sys_user"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-basic-auth-stale-api-accounts",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "priority": 1,
+      "name": "Dormant Basic Auth API Accounts",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-basic-auth-stale-api-accounts",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.5.17"
+        ],
+        "dora": [
+          "9"
+        ]
+      },
+      "attack_path_refs": [],
+      "global_scope_tables_read": [
+        "sys_user_basic_auth_exception",
+        "sys_user_has_role",
+        "sys_user"
+      ],
       "active": true
     }
   ],

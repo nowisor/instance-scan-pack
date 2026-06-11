@@ -21,6 +21,26 @@ declare global {
                         table: 'scan_script_only_check'
                         id: '22fcea3957b9db3ce7493c4fac419286'
                     }
+                    'nowisor-basic-auth-enforcement-posture': {
+                        table: 'scan_script_only_check'
+                        id: 'a51427c6fb91460fb88a6f2aa3793d44'
+                    }
+                    'nowisor-basic-auth-hybrid-undecided': {
+                        table: 'scan_script_only_check'
+                        id: '844180c573e842f7928a36ab8a9e6673'
+                    }
+                    'nowisor-basic-auth-restriction-inactive': {
+                        table: 'scan_script_only_check'
+                        id: '1c251545fa984bd8ab8cbf23d38352a5'
+                    }
+                    'nowisor-basic-auth-role-without-wsao': {
+                        table: 'scan_script_only_check'
+                        id: 'bd006a1828584c9baea63fc38c2dd58c'
+                    }
+                    'nowisor-basic-auth-stale-api-accounts': {
+                        table: 'scan_script_only_check'
+                        id: 'b7e1eb01b6074286b82a423fdd3bb362'
+                    }
                     'nowisor-cookie-http-only': {
                         table: 'scan_script_only_check'
                         id: '8b4167394dde4c07ba44ea980d18f62e'
@@ -136,6 +156,10 @@ declare global {
                     'nowisor-priv-sys-update-xml-read': {
                         table: 'sys_scope_privilege'
                         id: 'b165a7f0c6124c708be5459f5316360d'
+                    }
+                    'nowisor-priv-sys-user-basic-auth-exception-read': {
+                        table: 'sys_scope_privilege'
+                        id: '5d17a61440a1474b96216cf002b6d530'
                     }
                     'nowisor-priv-sys-user-grmember-read': {
                         table: 'sys_scope_privilege'
