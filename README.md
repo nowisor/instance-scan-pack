@@ -338,10 +338,35 @@ To connect:
 1. Sign in to nowisor.com
 2. Navigate to **Connect → ServiceNow Instance**
 3. Follow the OAuth 2.0 Authorization Code flow (the advisor never receives your admin credentials; it operates under a dedicated `nowisor_advisor` user with read-only `scan_finding` access)
-4. The advisor pulls findings on a schedule you set (default: hourly)
 
 Free tier (Community): pack-only, no advisor.
 Paid tiers (Pro / Enterprise): advisor enabled.
+
+### Automated push (recommended)
+
+Instead of copy-pasting scan output into the advisor, the pack can push its
+findings automatically from a Scheduled Job in your instance to the advisor's
+machine API:
+
+1. In nowisor.com go to **Settings → API Keys**, create a key with the
+   `scanpack:push` scope, and store it in your instance as a connection
+   credential or an `x_nowisor_isp` system property (encrypted `password2`
+   recommended — never hardcode it in the script).
+2. Create a **Scheduled Script Execution** (hourly is a reasonable default,
+   scheduled AFTER your Scheduled Scan cadence) with a script that:
+   - collects the latest `scan_finding` records exactly like
+     `tools/security-log-export.js` formats them (`---NOWISOR_METADATA---`
+     envelope, plus the optional `---NOWISOR_LOGEXPORT---` block), and
+   - POSTs them via `sn_ws.RESTMessageV2` to
+     `https://nowisor.com/api/v1/scan-pack/import` with headers
+     `Authorization: Bearer <your key>` and `Content-Type: application/json`,
+     body `{"rawInput": "<the envelope text>", "instanceLabel": "<instance name>"}`.
+3. The advisor correlates each push with its signature set and stores the
+   verdicts — same result as the paste flow, without the human in the loop.
+   Rate limit: 12 pushes/hour per key; the response is JSON with the verdicts.
+
+The outbound REST call is one-way: the key can only push findings and cannot
+read anything from the advisor account.
 
 ## Troubleshooting
 
