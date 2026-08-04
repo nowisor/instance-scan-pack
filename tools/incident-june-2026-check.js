@@ -45,10 +45,28 @@
     // retention holds); the checker compares this against your true retention floor.
     var WINDOW_START_ISO = '2026-04-01 00:00:00'
     var SCHEMA_VERSION = 'v1.1'
-    var PACK_VERSION = '1.0.0'
+    var PACK_VERSION = '1.2.0'
 
     var now = new GlideDateTime()
     var generatedAt = now.getValue()
+
+    // THE WINDOW MUST DECLARE ITS OWN WIDTH (round 9, INV58).
+    //
+    // This envelope carried start + end + note and no lookback_days, which is
+    // the only NOWISOR_LOGEXPORT producer that ever did. The advisor's window
+    // integrity check reconciles the DECLARED lookback against the span the
+    // envelope actually reports, and an absent declaration is unevaluable — a
+    // check that cannot run must refuse, so every paste from this sensor was
+    // about to be refused as an unverifiable export once that check shipped.
+    //
+    // Derived from the two values it must agree with rather than hardcoded: the
+    // window here is absolute (a fixed incident start through export time), so
+    // its width grows every day and any constant would drift into a
+    // self-contradiction. Rounded to whole days to match the advisor's own
+    // day-granular comparison.
+    var windowStartGdt = new GlideDateTime(WINDOW_START_ISO)
+    var windowSpanMs = now.getNumericValue() - windowStartGdt.getNumericValue()
+    var windowLookbackDays = Math.round(windowSpanMs / 86400000)
 
     var EXPECTED_SOURCES = ['syslog_transaction']
     var sourcesAvailable = []
@@ -95,19 +113,55 @@
         sourcesMissing.push('syslog_transaction')
         coverageNotes.push('syslog_transaction table not queryable on this instance')
     } else {
-        sourcesAvailable.push('syslog_transaction')
+        // AVAILABILITY AND RETENTION ARE SEPARATE CLAIMS (INV52, applied here in
+        // round 9). This used to push 'syslog_transaction' onto sourcesAvailable
+        // on table EXISTENCE alone, and the retention probe below could then
+        // fail or find nothing and leave audit_retention_start null with no
+        // other change to the envelope. That is the exact shape the same repair
+        // closed in security-log-export.js, left live in the second producer —
+        // "a repair wired into one consumer is wired into one consumer".
+        //
+        // It fails closed today only by accident of which table this sensor
+        // names, so it is fixed rather than argued about: a source that cannot
+        // state a retention floor cannot evidence a window, and the two failure
+        // modes are recorded by name so the checker can say WHICH happened.
 
         // True retention floor: the OLDEST syslog_transaction row, so the checker is
         // honest about whether retention reaches back to the exposure window rather
         // than implying the (short) returned set is the full history.
+        var floorProbeState = 'not_attempted'
         try {
             var floor = new GlideRecord('syslog_transaction')
             floor.orderBy('sys_created_on')
             floor.setLimit(1)
             floor.query()
-            if (floor.next()) retentionFloor = floor.getValue('sys_created_on')
+            if (floor.next()) {
+                retentionFloor = floor.getValue('sys_created_on')
+                floorProbeState = 'ok'
+            } else {
+                floorProbeState = 'empty'
+            }
         } catch (e) {
+            floorProbeState = 'failed'
             coverageNotes.push('syslog_transaction retention-floor probe failed: ' + (e && e.message))
+        }
+
+        // The gate, per INV52: only a source with a stated retention floor is
+        // reported as available.
+        if (floorProbeState === 'ok' && retentionFloor) {
+            sourcesAvailable.push('syslog_transaction')
+        } else if (floorProbeState === 'empty') {
+            sourcesMissing.push('syslog_transaction')
+            coverageNotes.push(
+                'syslog_transaction exists but holds no rows - no retention ' +
+                'floor, so it cannot evidence the exposure window'
+            )
+        } else {
+            sourcesMissing.push('syslog_transaction')
+            coverageNotes.push(
+                'syslog_transaction retention floor could not be measured, so ' +
+                'it cannot evidence the exposure window'
+            )
         }
 
         // The load-bearing read: every transaction to the patched endpoint your
@@ -162,6 +216,9 @@
             // Incident exposure window (label only — the query is unbounded below).
             start: WINDOW_START_ISO,
             end: generatedAt,
+            // Declared width, derived from start and end so the three can never
+            // disagree. Absent here until round 9 (INV58).
+            lookback_days: windowLookbackDays,
             note: 'Earliest-known activity ~April 2026; query is not lower-bounded.',
         },
         coverage: {

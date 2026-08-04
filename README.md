@@ -17,12 +17,12 @@ Open-source ServiceNow security check pack that runs inside your instance and pr
 
 The nowisor agent is the open-source **twin-sensor** surface of the nowisor product. It runs as a scoped application (`x_nowisor_isp`) inside your ServiceNow instance and emits two complementary streams, both consumed by the nowisor advisor's correlation engine:
 
-1. **Sensor surface #1 — config findings.** 32 scan checks emit `scan_finding` records carrying a human-readable description plus a structured `---NOWISOR_METADATA---` JSON block. These capture static security posture (properties, ACLs, code patterns).
+1. **Sensor surface #1 — config findings.** 49 scan checks emit `scan_finding` records carrying a human-readable description plus a structured `---NOWISOR_METADATA---` JSON block. These capture static security posture (properties, ACLs, code patterns).
 2. **Sensor surface #2 — log export.** A single Background Script (`tools/security-log-export.js`) emits a `---NOWISOR_LOGEXPORT---` envelope carrying runtime activity over a configurable lookback window (default 7 days): sys_audit on security-critical tables, sysevent discovery, syslog_transaction aggregated by user.
 
 The advisor binds the two streams: findings tell you what's misconfigured; the log export tells you which misconfigurations were actually exercised. This is the active-risk distinction. **No correlation logic ships in this pack** — that work lives in the closed-source advisor at nowisor.com. The pack is a pure sensor; consumers are free to ingest the schemas and run their own correlation.
 
-The 32 config checks span five categories:
+The 49 config checks span six categories:
 
 | Category | Count | What it audits |
 |---|---|---|
@@ -30,9 +30,14 @@ The 32 config checks span five categories:
 | ACL and role configuration | 6 | Admin role concentration, inactive users retaining roles, attachment role restrictions, OOB ACL modifications, cross-scope privilege grants, elevated role co-assignments |
 | Code analysis (AST-based) | 8 | `eval()`, `setWorkflow(false)`, `GlideEvaluator`, `GlideRecord` vs `GlideRecordSecure`, `setRoles()`, hardcoded credentials, direct `sys_properties` writes, cross-domain Script Includes |
 | Cross-cutting | 5 | Update-set XML privilege-escalation patterns, fabricated property references, meta check coverage, platform build drift, **audit coverage gap (#27 — new in 1.0.1)** |
+| AI and agent security | 17 | **New in 1.2.0.** Agentic inventory (AI-BOM), ownership, shadow-AI endpoints, inbound MCP / Action Fabric agents, governance coverage, and static guardrail posture. See the [category overview](./docs/ai-agent-security.md) |
 | Basic Auth API restriction | 5 | **New in 1.1.0.** Readiness for the ServiceNow Basic Auth API restriction rollout (KB3025707/KB3055080): tracking active, enforcement posture + days-remaining countdown, untriaged hybrid accounts (`sys_user_basic_auth_exception`), allow-list role granted without WSAO (MFA bypass), and dormant Basic Auth API accounts |
 
-The log export ships as `tools/security-log-export.js` — see §Running scans → Running the log export below.
+Four Background-Script sensors ship in `tools/`: `security-log-export.js` (runtime activity),
+plus three added in 1.2.0 for the AI module — `ai-discovery-export.js` (agentic surface
+enumeration), `ai-bom-export.js` (agentic inventory), and `ai-usage-export.js` (permission
+envelope + invocation evidence). All four are pure sensors: no correlation logic, no verdicts.
+See §Running scans → Running the log export below.
 
 The full machine-readable inventory is in [`manifest.json`](./manifest.json).
 
@@ -40,7 +45,7 @@ The full machine-readable inventory is in [`manifest.json`](./manifest.json).
 
 This pack is **not** a replacement for ServiceNow Security Center or the platform's built-in scan checks. It runs alongside them. The differences:
 
-- **Framework alignment.** nowisor checks map to NIS2, DORA, ISO 27001, and GDPR — the CISO-facing regulatory frameworks. Security Center's checks align primarily to OWASP ASVS, which targets the developer audience. The two complement each other; deploy both.
+- **Framework alignment.** nowisor checks map to NIS2, DORA, ISO 27001, and GDPR — the CISO-facing regulatory frameworks. The `ai-agent-security` group additionally carries OWASP LLM Top 10, MITRE ATLAS, and (conservatively) EU AI Act mappings. Security Center's checks align primarily to OWASP ASVS, which targets the developer audience. The two complement each other; deploy both.
 - **Detection model.** nowisor includes AST-based linting (Code analysis category) and finding-level metadata for downstream automation. Security Center provides broader platform telemetry.
 - **Coordination layer.** nowisor findings are designed to be consumed by the nowisor advisor (paid tier) for AI-assisted triage. The findings remain in your instance regardless — you can read them directly in the `scan_finding` table or via the standard Instance Scan UI.
 
@@ -310,6 +315,25 @@ Pack versions follow semver:
 - Major (x.0.0): finding schema breaking change (bumps `nowisor_finding_schema`); backwards-compat window: current + previous, 12 months
 
 ### Changelog
+
+**1.2.0 (2026-08-01)** — Added the **AI and agent security** check group (17 checks, `nowisor-ai-*`): 9 inventory checks (AIA-001..009) covering agent ownership, review trail, shadow-AI endpoints, sub-production posture, dormant grants, shared execution identities, elevated run-as, ungoverned inbound MCP / Action Fabric agents, and AI Control Tower registry coverage; plus 8 static guardrail and governance-posture checks (AIG-001..008). Three new sensors: `ai-discovery-export.js`, `ai-bom-export.js`, `ai-usage-export.js`.
+
+Notable in this release:
+
+- **`log_sources[]` gained per-source completeness** (`truncated`, `effective_lookback_days`). Both fields are optional and additive — the envelope schema stays `v1`, and a consumer that ignores them behaves exactly as before. They exist because the run-level `budget.exhausted` flag cannot say *which* log table was cut short, and an advisor that cannot tell the difference has to treat a complete source as truncated. A budget that ran out harvesting the fourth candidate says nothing about the first three, whose rows are already in hand.
+- **A truncated run can no longer read as "never used".** When the sensor stops early, `invocations` is empty *because it stopped* — which over a window the log table happens to cover is indistinguishable from a permission that was genuinely never exercised. The advisor now caps the evidence window at what the sensor reports it achieved, so a truncated run resolves to `UNKNOWN-USAGE` with "evidence collection incomplete (query budget)" rather than a revocation instruction. Sensor output is unchanged in shape apart from the two fields above; the guarantee is in how it is read.
+
+- **Enumeration-driven detection.** Table and field names are resolved from `sys_db_object` / `sys_dictionary` at runtime, never hardcoded. The `sn_aia` namespace is paid-SKU gated and cannot be verified against a developer instance, so asserting its identifiers from documentation alone was not defensible.
+- **Absent plugin ⇒ `N/A`, never PASS.** The absence of Now Assist is out of scope, not a security win.
+- **The CONDITIONAL cap became code.** Delegation-aware severity was previously prose in `lib/delegation-severity.md` consumed by LLM surfaces. For agent permissions it is now a deterministic function with its own tests: a grant whose lineage was never observed caps at CONDITIONAL and names the artifact that would settle it, and only a *complete* delegation-chain walk can lift the cap. Presentation is separate from semantics — an unconfirmed sensitive write still renders in its floor band rather than sinking below confirmed lower severities.
+- **Framework mapping additions.** `owasp_llm`, `mitre_atlas` and `eu_ai_act` join the existing `nis2` / `iso27001` / `dora` keys (additive; finding schema stays `v1`). OWASP Agentic threat IDs are deliberately omitted until they can be cited version-pinned.
+- **DORA sub-article precision.** The new group emits ASCII sub-article ids (`9.4.c`) which the advisor renders as `9§4(c)`; Rhino ES0 cannot emit the section sign. The 18 legacy checks still emit whole-article `['9']` — tracked separately.
+
+Total checks 32 → 49.
+
+*Adversarial review.* This release was reviewed in two adversarial passes that asserted invariants and then tried to falsify them. **Round 1 falsified 4 of 4** — the DORMANT gate was checking log-source *presence* rather than retention *span*, the CycloneDX output failed the official 1.6 schema, unknown envelope markers were dropped silently, and "this property exists on a dev instance" was being read as "this property is safe to prescribe". **Round 2 falsified 12 more**, the most serious being the truncated-run case above. All 16 are fixed, each with a test that fails if the fix is reverted. Two of the tests that *should* have caught round 1's findings had instead been written to assert the broken behaviour, and were inverted.
+
+The point of recording this in a changelog: a scanner that recommends revoking production access is only as trustworthy as its willingness to be wrong in public. The failure modes above are the ones we found by attacking our own work; the fresh-instance pass over these repairs has not run yet.
 
 **1.1.0 (2026-06-11)** — Added the **Basic Auth API restriction** check group (5 checks, `nowisor-basic-auth-*`) for the ServiceNow Basic Auth restriction rollout (KB3025707/KB3055080): restriction-tracking-active, enforcement-posture (with days-remaining countdown), hybrid-accounts-undecided (`sys_user_basic_auth_exception`), role-without-WSAO (MFA-bypass), and dormant-API-accounts. All identifiers (4 `glide.authenticate.basic_auth.restriction.*` properties, the allow-list properties, the `snc_basic_auth_api_access` role, and the `sys_user_basic_auth_exception` table + fields + `decision` choices) verified read-only on Zurich Patch 6 `dev265147`, 2026-06-11. Ships a cross-scope read privilege for `sys_user_basic_auth_exception`. Total checks 27 → 32.
 

@@ -13,6 +13,74 @@ declare global {
                         table: 'scan_script_only_check'
                         id: 'e27b5266082240d8bf97d231ca14ca52'
                     }
+                    'nowisor-ai-agent-audit-retention': {
+                        table: 'scan_script_only_check'
+                        id: '318995c957b041929a7dfa531d8d7d55'
+                    }
+                    'nowisor-ai-agent-elevated-runas': {
+                        table: 'scan_script_only_check'
+                        id: '53a5a980dd174dc28ad2b469992a0c38'
+                    }
+                    'nowisor-ai-agent-unowned': {
+                        table: 'scan_script_only_check'
+                        id: 'f5490df10b0e45d3823ece36740654e6'
+                    }
+                    'nowisor-ai-agent-unreviewed-prod': {
+                        table: 'scan_script_only_check'
+                        id: 'f3d45d540e01455099bdd9ff047d9d76'
+                    }
+                    'nowisor-ai-control-tower-coverage-gap': {
+                        table: 'scan_script_only_check'
+                        id: '8b478c84dba3463abb06ae13bc84def4'
+                    }
+                    'nowisor-ai-dormant-skill-grants': {
+                        table: 'scan_script_only_check'
+                        id: '736d1ed3461a4f3b8ddac18efd9d7292'
+                    }
+                    'nowisor-ai-governance-unconfigured': {
+                        table: 'scan_script_only_check'
+                        id: 'd3768cf2b840402bb0dbfb1b54b75cf8'
+                    }
+                    'nowisor-ai-guardrail-hitl': {
+                        table: 'scan_script_only_check'
+                        id: '24f619e5313049d69a7dbf3e4064cc1a'
+                    }
+                    'nowisor-ai-inbound-agent-ungoverned': {
+                        table: 'scan_script_only_check'
+                        id: '59143f9ffab645daaf252924f2c14ac8'
+                    }
+                    'nowisor-ai-kill-switch-absent': {
+                        table: 'scan_script_only_check'
+                        id: 'bfacccf3f3d34e88bb753d84f62db516'
+                    }
+                    'nowisor-ai-llm-data-residency': {
+                        table: 'scan_script_only_check'
+                        id: 'da8fcc575eca4739a3c9f43e8d133ab5'
+                    }
+                    'nowisor-ai-llm-payload-masking': {
+                        table: 'scan_script_only_check'
+                        id: '38ee3bcc796c4a018c3de079efcaef4b'
+                    }
+                    'nowisor-ai-mcp-exposure-scope': {
+                        table: 'scan_script_only_check'
+                        id: '3ecca86de52840cf8f772b3a9a59b436'
+                    }
+                    'nowisor-ai-prompt-injection-exposure': {
+                        table: 'scan_script_only_check'
+                        id: '9646b32d999d4ec787740125d850197c'
+                    }
+                    'nowisor-ai-shadow-llm-endpoint': {
+                        table: 'scan_script_only_check'
+                        id: '62a7eaa70da14e6cb21ca0ef7726288e'
+                    }
+                    'nowisor-ai-shared-runas-identity': {
+                        table: 'scan_script_only_check'
+                        id: 'd0a62d2f21aa48c68036ae29df0f55b3'
+                    }
+                    'nowisor-ai-subprod-unmasked-posture': {
+                        table: 'scan_script_only_check'
+                        id: 'd1a4bbbba90c46248df2d7d8889694fb'
+                    }
                     'nowisor-attachment-role-restriction': {
                         table: 'scan_script_only_check'
                         id: '625d958169f541588e3c45128468e1ad'

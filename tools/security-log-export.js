@@ -41,8 +41,10 @@
     var LOOKBACK_DAYS = 7
     var ROW_CAP = 300
     var TOP_USERS_LIMIT = 25
-    var SCHEMA_VERSION = 'v1'
-    var PACK_VERSION = '1.0.0'
+    var UPGRADE_LOOKBACK_DAYS = 730 // span typical CVE disclosure→patch windows
+    var UPGRADE_ROW_CAP = 50
+    var SCHEMA_VERSION = 'v1.1'
+    var PACK_VERSION = '1.2.0'
 
     var now = new GlideDateTime()
     var start = new GlideDateTime()
@@ -59,6 +61,10 @@
     var sourcesAvailable = []
     var sourcesMissing = []
     var coverageNotes = []
+    // True retention floor: oldest sys_audit row available, so the CVE-anchor
+    // coverage check is honest about retention vs. the disclosure→patch window
+    // rather than trusting the fixed LOOKBACK_DAYS box. null until measured.
+    var auditRetentionStart = null
 
     // ---- Layer-1 gate helper: returns true only if the table is queryable -----
     // Primary signal: sys_db_object row exists for the table. This is the
@@ -102,11 +108,24 @@
             'AND sys_created_on >= window.start',
         rows: [],
     }
+    // AVAILABILITY AND RETENTION ARE SEPARATE CLAIMS (INV52).
+    //
+    // This used to push 'sys_audit' onto sourcesAvailable here, on table
+    // EXISTENCE alone, and the retention-floor probe below could then fail or
+    // find nothing and leave audit_retention_start null with no other change to
+    // the envelope. The advisor read "source available, retention absent" and
+    // filled the gap in with the window start, concluding full coverage.
+    //
+    // A source that cannot state a retention floor cannot evidence a window, so
+    // the push is deferred to after the probe and gated on its result. A failed
+    // probe is a DISTRUST signal, not silence: it is recorded by name so the
+    // advisor can say WHY the source is unavailable rather than implying the
+    // table is missing.
+    var auditProbeState = 'not_attempted'
     if (!tableExists('sys_audit')) {
         sourcesMissing.push('sys_audit')
         coverageNotes.push('sys_audit table not queryable on this instance')
     } else {
-        sourcesAvailable.push('sys_audit')
         var auditedTables = ['sys_user_has_role', 'sys_security_acl', 'sys_properties']
         var auditRows = []
         var auditCount = 0
@@ -167,6 +186,44 @@
         }
         sysAuditPayload.row_count = auditCount
         sysAuditPayload.rows = auditRows
+        // Retention floor: the OLDEST audit row on the security-critical tables.
+        // This can predate the (recent, capped) rows returned above, so it is
+        // the honest earliest-data signal the CVE coverage check needs. One
+        // ascending-ordered read; read-only, safe for production.
+        try {
+            var oldest = new GlideRecord('sys_audit')
+            oldest.addQuery('tablename', 'IN', auditedTables.join(','))
+            oldest.orderBy('sys_created_on')
+            oldest.setLimit(1)
+            oldest.query()
+            if (oldest.next()) {
+                auditRetentionStart = oldest.getValue('sys_created_on')
+                auditProbeState = 'ok'
+            } else {
+                auditProbeState = 'empty'
+            }
+        } catch (e) {
+            auditProbeState = 'failed'
+            coverageNotes.push('sys_audit retention-floor probe failed: ' + (e && e.message))
+        }
+        // The gate, per INV52. Only a source with a stated retention floor is
+        // reported as available; the other two states are named so the advisor
+        // never has to guess which one happened.
+        if (auditProbeState === 'ok' && auditRetentionStart) {
+            sourcesAvailable.push('sys_audit')
+        } else if (auditProbeState === 'empty') {
+            sourcesMissing.push('sys_audit')
+            coverageNotes.push(
+                'sys_audit exists but holds no rows on the audited tables - ' +
+                'no retention floor, so it cannot evidence a window'
+            )
+        } else {
+            sourcesMissing.push('sys_audit')
+            coverageNotes.push(
+                'sys_audit retention floor unreadable - reported unavailable ' +
+                'because availability without a retention floor cannot evidence a window'
+            )
+        }
     }
 
     // ---- sysevent (auth/security family — discovery, never hardcoded) --------
@@ -334,6 +391,78 @@
         }
     }
 
+    // ---- upgrade_history (CVE exposure-window patch date) --------------------
+    // The CVE-anchor correlation derives the actual patch date from this so it
+    // can bound the disclosure→patch exposure window. sys_upgrade_history field
+    // names are NOT yet PDI-verified on the Zurich/Australia corpus (2-evidence
+    // rule pending) — query behind the tableExists() gate and pull fields with
+    // getValue(), which returns '' for an absent field rather than throwing, so
+    // an unverified field name degrades to empty (never an error). The engine
+    // tolerates missing/empty timestamps (→ patch date unknown → window stays
+    // open → INVESTIGATE). TODO: PDI-verify table + fields, then drop the TODO
+    // marker and append to fabricated-props-resolution-log.md.
+    var upgradeHistory = {
+        available: false,
+        row_count: 0,
+        cap_hit: false,
+        schema_note:
+            'sys_upgrade_history fields TODO: PDI-verify ' +
+            '(to_version, from_version, state, sys_created_on, sys_updated_on)',
+        rows: [],
+    }
+    if (tableExists('sys_upgrade_history')) {
+        upgradeHistory.available = true
+        var upStart = new GlideDateTime()
+        upStart.addDaysUTC(-UPGRADE_LOOKBACK_DAYS)
+        try {
+            var ur = new GlideRecord('sys_upgrade_history')
+            ur.addQuery('sys_created_on', '>=', upStart.getValue())
+            ur.orderByDesc('sys_created_on')
+            ur.setLimit(UPGRADE_ROW_CAP + 1)
+            ur.query()
+            var upCount = 0
+            var upRows = []
+            while (ur.next()) {
+                upCount++
+                if (upRows.length >= UPGRADE_ROW_CAP) {
+                    upgradeHistory.cap_hit = true
+                    break
+                }
+                upRows.push({
+                    to_version: ur.getValue('to_version'),
+                    from_version: ur.getValue('from_version'),
+                    state: ur.getValue('state'),
+                    sys_created_on: ur.getValue('sys_created_on'),
+                    sys_updated_on: ur.getValue('sys_updated_on'),
+                })
+            }
+            upgradeHistory.row_count = upCount
+            upgradeHistory.rows = upRows
+        } catch (e) {
+            coverageNotes.push('sys_upgrade_history query partial: ' + (e && e.message))
+        }
+    } else {
+        coverageNotes.push('sys_upgrade_history not queryable — CVE patch date cannot be derived')
+    }
+
+    // ---- instance_version (Layer-1 convenience auto-detect; best-effort) -----
+    // Standard build properties read defensively (gs.getProperty with sentinel),
+    // same pattern as build_drift above. Convenience only — the forensic verdict
+    // uses upgrade_history, not these. Emits null when a property is unset.
+    function propOrNull(name) {
+        try {
+            var v = gs.getProperty(name, '__NOT_SET__')
+            return v === '__NOT_SET__' ? null : v
+        } catch (e) {
+            return null
+        }
+    }
+    var instanceVersion = {
+        builddate: propOrNull('glide.builddate'),
+        buildtag: propOrNull('glide.buildtag') || buildtagLast,
+        war: propOrNull('glide.war'),
+    }
+
     // ---- Envelope ------------------------------------------------------------
     var coverageNoteStr =
         sourcesAvailable.length +
@@ -357,12 +486,15 @@
             sources_available: sourcesAvailable,
             sources_missing: sourcesMissing,
             coverage_note: coverageNoteStr,
+            audit_retention_start: auditRetentionStart,
         },
         build_drift: {
             buildtag_last: buildtagLast,
             lastplugin: lastPlugin,
             recent_property_changes_30d: recentPropertyChanges30d,
         },
+        upgrade_history: upgradeHistory,
+        instance_version: instanceVersion,
         sources: {
             sys_audit: sysAuditPayload,
             sysevent: sysEventPayload,

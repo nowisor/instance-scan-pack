@@ -1,9 +1,12 @@
 {
   "pack_name": "nowisor-instance-scan-agent",
-  "pack_version": "1.1.0",
+  "pack_version": "1.2.0",
   "finding_schema_version": "v1",
   "logexport_schema_version": "v1",
-  "release_date": "2026-06-11",
+  "aidiscovery_schema_version": "v1",
+  "aibom_schema_version": "v1",
+  "aiusage_schema_version": "v1",
+  "release_date": "2026-07-30",
   "released_against": {
     "servicenow_releases": [
       "zurich",
@@ -784,6 +787,768 @@
         "sys_user"
       ],
       "active": true
+    },
+    {
+      "id": "nowisor-ai-agent-unowned",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "AI Agent Without Assigned Owner",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-agent-unowned",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.8.2"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0103"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-agent-unreviewed-prod",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "Active AI Agent With No Review Or Approval Trail",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-agent-unreviewed-prod",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.e",
+          "21.2.f"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.8.25"
+        ],
+        "dora": [
+          "9.4.a"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0081",
+          "AML.T0103"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "26",
+            "conditional": true
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sysapproval_approver"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-shadow-llm-endpoint",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 1,
+      "name": "Shadow AI - Unsanctioned External LLM Endpoint",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-shadow-llm-endpoint",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.a",
+          "21.2.d"
+        ],
+        "iso27001": [
+          "A.5.15",
+          "A.8.16"
+        ],
+        "dora": [
+          "9.3.a",
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM02:2025",
+          "LLM03:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0025",
+          "AML.T0096"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "50",
+            "conditional": true
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_rest_message",
+        "sys_rest_message_fn",
+        "sys_connection",
+        "sys_connection_alias"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-subprod-unmasked-posture",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 3,
+      "name": "Agentic Features Active On Unmasked Sub-Production Instance",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-subprod-unmasked-posture",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.e",
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.8.33",
+          "A.5.15"
+        ],
+        "dora": [
+          "9.3.d"
+        ],
+        "owasp_llm": [
+          "LLM02:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0025"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_data_preserver"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-dormant-skill-grants",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 3,
+      "name": "Inactive AI Agent Retains Capability Grants",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-dormant-skill-grants",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.8.2"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0012"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_user_has_role",
+        "sys_user"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-shared-runas-identity",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "Multiple AI Agents Share One Execution Identity",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-shared-runas-identity",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.b",
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.8.15"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0012"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_user_has_role"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-agent-elevated-runas",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 1,
+      "name": "AI Agent Runs As Elevated Identity",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-agent-elevated-runas",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.8.2",
+          "A.5.15"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0012",
+          "AML.T0053"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "26",
+            "conditional": true
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_user_has_role",
+        "sys_user_role"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-inbound-agent-ungoverned",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 1,
+      "name": "Ungoverned Inbound External Agent (MCP / Action Fabric)",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-inbound-agent-ungoverned",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.d",
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.5.15",
+          "A.8.2"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM03:2025",
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0103",
+          "AML.T0108"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-control-tower-coverage-gap",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "AI Control Tower Registry Coverage Gap",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-control-tower-coverage-gap",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.f",
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.5.16",
+          "A.8.16"
+        ],
+        "dora": [
+          "9.4.a"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0103"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-guardrail-hitl",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "AI Agent Can Write Without A Human Gate",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-guardrail-hitl",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.a",
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.8.2",
+          "A.5.15"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0053"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "26",
+            "conditional": true
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_user_has_role",
+        "sysapproval_approver"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-llm-payload-masking",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "No Data-Protection Control Over Agent-Readable Data",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-llm-payload-masking",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.h",
+          "21.2.i"
+        ],
+        "iso27001": [
+          "A.8.24",
+          "A.5.15"
+        ],
+        "dora": [
+          "9.3.b"
+        ],
+        "owasp_llm": [
+          "LLM02:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0024"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "50",
+            "conditional": true
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_data_policy2"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-agent-audit-retention",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "Agent Action Logging Disabled Or Below Retention Floor",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-agent-audit-retention",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.b"
+        ],
+        "iso27001": [
+          "A.8.15",
+          "A.8.16"
+        ],
+        "dora": [
+          "10.1"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0053"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_audit"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-prompt-injection-exposure",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 1,
+      "name": "Prompt-Injection Exposure Via Input Binding",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-prompt-injection-exposure",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.a",
+          "21.2.e"
+        ],
+        "iso27001": [
+          "A.8.28",
+          "A.8.2"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM01:2025",
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0051",
+          "AML.T0053"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_security_acl",
+        "sys_security_acl_role",
+        "sys_user_has_role"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-kill-switch-absent",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 3,
+      "name": "No Machine-Checkable Agent Deactivation Path",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-kill-switch-absent",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.b",
+          "21.2.c"
+        ],
+        "iso27001": [
+          "A.5.24",
+          "A.5.26"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0053"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "v_plugin",
+        "sys_user_has_role"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-llm-data-residency",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "LLM Connection Terminating Outside The EU",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-llm-data-residency",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.d",
+          "21.2.h"
+        ],
+        "iso27001": [
+          "A.5.15",
+          "A.8.24"
+        ],
+        "dora": [
+          "9.3.a"
+        ],
+        "owasp_llm": [
+          "LLM02:2025",
+          "LLM03:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0025"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "50",
+            "conditional": true
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "sys_rest_message",
+        "sys_connection_alias"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-mcp-exposure-scope",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "MCP / Action Fabric Exposure Scope Too Broad",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-mcp-exposure-scope",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.i",
+          "21.2.d"
+        ],
+        "iso27001": [
+          "A.8.2",
+          "A.5.15"
+        ],
+        "dora": [
+          "9.4.c"
+        ],
+        "owasp_llm": [
+          "LLM06:2025",
+          "LLM03:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0012",
+          "AML.T0053"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "oauth_entity"
+      ],
+      "active": true
+    },
+    {
+      "id": "nowisor-ai-governance-unconfigured",
+      "version": "1.0.0",
+      "type": "ScriptOnlyCheck",
+      "category": "security",
+      "check_group": "ai-agent-security",
+      "priority": 2,
+      "name": "AI Governance Layer Deployed But Unconfigured",
+      "kb_url": "https://nowisor.com/kb/checks/nowisor-ai-governance-unconfigured",
+      "framework_mappings": {
+        "nis2": [
+          "21.2.a",
+          "21.2.f"
+        ],
+        "iso27001": [
+          "A.5.15",
+          "A.8.16"
+        ],
+        "dora": [
+          "9.4.a"
+        ],
+        "owasp_llm": [
+          "LLM06:2025"
+        ],
+        "mitre_atlas": [
+          "AML.T0103"
+        ],
+        "eu_ai_act": [
+          {
+            "article": "4",
+            "conditional": false
+          }
+        ]
+      },
+      "attack_path_refs": [
+        "AP-013"
+      ],
+      "global_scope_tables_read": [
+        "sys_db_object",
+        "sys_dictionary",
+        "v_plugin"
+      ],
+      "active": true
     }
   ],
   "tools": [
@@ -794,6 +1559,33 @@
       "emits_schema": "logexport_schema_version",
       "path": "tools/security-log-export.js",
       "purpose": "Twin-sensor #2: emits log-export schema v1 envelope (sys_audit on role/security/properties tables + sysevent discovery + syslog_transaction top-25 by user) over a configurable lookback window. Read-only. Pure sensor — no correlation logic."
+    },
+    {
+      "id": "ai-discovery-export",
+      "version": "1.0.0",
+      "type": "BackgroundScript",
+      "emits_schema": "aidiscovery_schema_version",
+      "path": "tools/ai-discovery-export.js",
+      "check_group": "ai-agent-security",
+      "purpose": "Phase 0 sensor: emits ai-discovery schema v1 envelope. Enumerates the agentic surface (plugins present/absent, sys_db_object scope-prefix scan, per-table sys_dictionary field resolution, AI Control Tower + MCP/Action Fabric state, external LLM endpoints, log sources with their earliest record). Read-only. Pure sensor - no verdicts. Enumeration-driven by design: no sn_aia / sn_now_assist identifier is asserted from memory, because that namespace is paid-SKU gated and cannot satisfy CLAUDE.md evidence leg (a)."
+    },
+    {
+      "id": "ai-bom-export",
+      "version": "1.0.0",
+      "type": "BackgroundScript",
+      "emits_schema": "aibom_schema_version",
+      "path": "tools/ai-bom-export.js",
+      "check_group": "ai-agent-security",
+      "purpose": "Phase A sensor: emits ai-bom schema v1 envelope, one record per agentic entity with NHI lifecycle attributes (owner, lifecycle state, run-as, last review, governance registration). Every attribute carries a resolution state - set | empty | unresolved - so the advisor can distinguish a real gap (empty) from a field the release does not expose (unresolved). Read-only. Pure sensor - no verdicts."
+    },
+    {
+      "id": "ai-usage-export",
+      "version": "1.0.0",
+      "type": "BackgroundScript",
+      "emits_schema": "aiusage_schema_version",
+      "path": "tools/ai-usage-export.js",
+      "check_group": "ai-agent-security",
+      "purpose": "Phase B sensor: emits ai-usage schema v1 envelope. Per agentic entity the PERMISSION ENVELOPE (run-as roles with lineage and inheritance chain, ACL write reach, cross-scope privileges, MCP tool packages) and the INVOCATION EVIDENCE attributed to the run-as identity, plus each log source's earliest record. Read-only. Pure sensor - no verdicts. The retention floors are what let the advisor's coverage gate decide whether DORMANT is defensible; without them every permission degrades to UNKNOWN-USAGE. Respects a per-scan query budget and reports a truncated run rather than passing it off as complete."
     }
   ]
 }
