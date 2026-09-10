@@ -6,8 +6,10 @@
 // record. That table is created by the Multi-Provider SSO plugin
 // (com.snc.integration.sso.multi.installer) and an active row IS a configured
 // IdP — the canonical OOB indicator on Zurich P6 and Australia P3. Where the
-// plugin is inactive the table does not exist, the query throws, and the check
-// exits as no-SSO (measured on dev371429, 2026-09-10).
+// plugin is inactive the table does not exist and the try/catch below leaves
+// ssoActive false, so the check exits as no-SSO. (Measured on dev371429,
+// 2026-09-10: GlideTableDescriptor.isValid('sso_properties') = false and
+// GlideAggregate.addQuery threw "invalid table name"; either way, no finding.)
 //
 // Evidence, not a signal: glide.authenticate.multissov2_feature.enabled is read
 // sentinel-guarded and reported in every finding. It says whether the plugin is
