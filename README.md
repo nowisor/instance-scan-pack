@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.1.0
+- **Pack version:** 1.2.1
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -315,6 +315,8 @@ Pack versions follow semver:
 - Major (x.0.0): finding schema breaking change (bumps `nowisor_finding_schema`); backwards-compat window: current + previous, 12 months
 
 ### Changelog
+
+**1.2.1 (2026-09-10)** — `nowisor-external-auth-policy` 1.0.1: removed a sentinel-guarded read of a per-SSO enable property that does not exist on any release (adjudicated fabricated 2026-04-28), which could never fire and read like a signal. SSO detection is the `sso_properties` active-row count alone — where the Multi-Provider SSO plugin is inactive the table is absent and the check exits as no-SSO (measured on Australia P3 `dev371429`). The real `glide.authenticate.multissov2_feature.enabled` (verified on the Zurich P6 capture + ServiceNow docs) is now reported as finding evidence `multisso_v2_feature_enabled`; it says the plugin is at v2, not that an IdP is configured, so it never decides the finding. Check count unchanged (49).
 
 **1.2.0 (2026-08-01)** — Added the **AI and agent security** check group (17 checks, `nowisor-ai-*`): 9 inventory checks (AIA-001..009) covering agent ownership, review trail, shadow-AI endpoints, sub-production posture, dormant grants, shared execution identities, elevated run-as, ungoverned inbound MCP / Action Fabric agents, and AI Control Tower registry coverage; plus 8 static guardrail and governance-posture checks (AIG-001..008). Three new sensors: `ai-discovery-export.js`, `ai-bom-export.js`, `ai-usage-export.js`.
 

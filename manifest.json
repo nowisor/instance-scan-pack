@@ -1,12 +1,12 @@
 {
   "pack_name": "nowisor-instance-scan-agent",
-  "pack_version": "1.2.0",
+  "pack_version": "1.2.1",
   "finding_schema_version": "v1",
   "logexport_schema_version": "v1",
   "aidiscovery_schema_version": "v1",
   "aibom_schema_version": "v1",
   "aiusage_schema_version": "v1",
-  "release_date": "2026-07-30",
+  "release_date": "2026-09-10",
   "released_against": {
     "servicenow_releases": [
       "zurich",
@@ -14,7 +14,8 @@
     ],
     "verified_on": [
       "dev265484",
-      "dev265147"
+      "dev265147",
+      "dev371429"
     ]
   },
   "checks": [
@@ -189,7 +190,7 @@
     },
     {
       "id": "nowisor-external-auth-policy",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "type": "ScriptOnlyCheck",
       "category": "security",
       "priority": 2,

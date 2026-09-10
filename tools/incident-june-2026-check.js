@@ -45,7 +45,7 @@
     // retention holds); the checker compares this against your true retention floor.
     var WINDOW_START_ISO = '2026-04-01 00:00:00'
     var SCHEMA_VERSION = 'v1.1'
-    var PACK_VERSION = '1.2.0'
+    var PACK_VERSION = '1.2.1'
 
     var now = new GlideDateTime()
     var generatedAt = now.getValue()

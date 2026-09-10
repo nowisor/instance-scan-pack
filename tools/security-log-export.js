@@ -44,7 +44,7 @@
     var UPGRADE_LOOKBACK_DAYS = 730 // span typical CVE disclosure→patch windows
     var UPGRADE_ROW_CAP = 50
     var SCHEMA_VERSION = 'v1.1'
-    var PACK_VERSION = '1.2.0'
+    var PACK_VERSION = '1.2.1'
 
     var now = new GlideDateTime()
     var start = new GlideDateTime()
