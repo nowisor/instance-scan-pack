@@ -49,7 +49,7 @@ Run in order. Capture each output verbatim and report back so the addendum can d
 **Where:** developer terminal (NOT inside dev265484)
 
 ```bash
-cd "/Users/TheBrain/My Drive/vsme/vsme-kb/nowisor/instance-scan-pack"
+cd ~/nowisor/vsme-kb/nowisor/instance-scan-pack
 npx now-sdk install --reinstall --auth <dev265484-auth-token>
 ```
 

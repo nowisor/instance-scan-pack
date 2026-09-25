@@ -11,6 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
@@ -102,6 +106,14 @@ jobs:
             exit 1
           fi
           echo "All check scripts emit v1 metadata"
+
+      # WI-MIRROR-1 Item 2. The README states its check count in prose, and a
+      # prose copy of a manifest fact goes stale silently: this repo told users
+      # to expect "26 checks" and to "confirm all 26 are active=true" for four
+      # months after the pack reached 49. The same rule runs in the monorepo
+      # (vsme-kb CI + vitest) -- one implementation, three entry points.
+      - name: README counts match manifest.json, and no dead archived paths
+        run: node ci/check-doc-counts.js
 
   build:
     runs-on: ubuntu-latest

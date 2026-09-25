@@ -116,7 +116,7 @@ The install uploads the built package to `sn_appclient_upload_processor.do` on t
 
 ### Step 4 — Run the suite bootstrap (required post-install step)
 
-The Fluent SDK 4.6.0 does not expose a `ScanCheckSuite` API. The suite that aggregates the 26 checks must be provisioned via Background Script after the install.
+The Fluent SDK 4.6.0 does not expose a `ScanCheckSuite` API. The suite that aggregates the pack's checks (every entry in `manifest.json`) must be provisioned via Background Script after the install.
 
 1. Navigate to **System Definition → Scripts - Background**
 2. Open [`bootstrap/install-suite.js`](./bootstrap/install-suite.js)
@@ -130,7 +130,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see 27 nowisor checks under the `x_nowisor_isp` scope — 25 active and 2 deferred (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.2.1) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -399,7 +399,7 @@ read anything from the advisor account.
 ### "No findings produced after scan"
 
 - **Suite not bootstrapped.** Run `bootstrap/install-suite.js`. Without it, the platform's full-scan engine never executes the checks.
-- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm all 26 are `active=true`.
+- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.2.1; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
 - **Cross-scope read denied.** If scan_check_execution records show "permission denied" on Global tables, your instance enforces strict scope isolation. The pack ships 17 `CrossScopePrivilege` records — verify they were committed in the update set.
 
 ### "Build fails with TypeScript errors in keys.ts"
@@ -447,7 +447,7 @@ if (cur.split(',').indexOf('nowisor') === -1) {
 gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
 ```
 
-Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with all 27 checks. Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.2.1). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
 
 If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
 
@@ -456,7 +456,7 @@ If the `syslog` shows a *different* line instead of the third-party block, two o
 | Release | Verified | Status |
 |---|---|---|
 | Zurich Patch 6 | dev265484 | Fully verified — property baseline complete; 24/24 verification Background Scripts pass on a live instance |
-| Australia Patch 2 | dev194572 | **Verified end-to-end** — v1.0.0 installs cleanly (scope + 27 checks, 25 active / 2 deferred) after trusting the pack's vendor key in `sn_appauthor.all_company_keys`; see [Troubleshooting → "application was null"](#troubleshooting). Suite bootstrap + a live suite scan validated: 144 findings emitted under `x_nowisor_isp` with the intact `---NOWISOR_METADATA---` v1 schema (advisor-integration contract holds). The third-party rejection is a per-instance policy, not a build issue. Verified 2026-05-31. |
+| Australia Patch 2 | dev194572 | **Verified end-to-end** (v1.0.0, then 25 active / 2 deferred checks; the count has since grown — see the changelog) — installs cleanly after trusting the pack's vendor key in `sn_appauthor.all_company_keys`; see [Troubleshooting → "application was null"](#troubleshooting). Suite bootstrap + a live suite scan validated: 144 findings emitted under `x_nowisor_isp` with the intact `---NOWISOR_METADATA---` v1 schema (advisor-integration contract holds). The third-party rejection is a per-instance policy, not a build issue. Verified 2026-05-31. <!-- doc-count:historical: this row records the v1.0.0 end-to-end run; its numbers are that era's, not today's --> |
 | Older releases (Yokohama, Xanadu, Washington DC) | not verified | Likely works but unverified; file an issue if you test |
 
 ### Pending PDI verification (gates v1.1)
