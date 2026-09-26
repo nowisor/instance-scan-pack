@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.2.1
+- **Pack version:** 1.3.0
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -33,11 +33,14 @@ The 49 config checks span six categories:
 | AI and agent security | 17 | **New in 1.2.0.** Agentic inventory (AI-BOM), ownership, shadow-AI endpoints, inbound MCP / Action Fabric agents, governance coverage, and static guardrail posture. See the [category overview](./docs/ai-agent-security.md) |
 | Basic Auth API restriction | 5 | **New in 1.1.0.** Readiness for the ServiceNow Basic Auth API restriction rollout (KB3025707/KB3055080): tracking active, enforcement posture + days-remaining countdown, untriaged hybrid accounts (`sys_user_basic_auth_exception`), allow-list role granted without WSAO (MFA bypass), and dormant Basic Auth API accounts |
 
-Four Background-Script sensors ship in `tools/`: `security-log-export.js` (runtime activity),
-plus three added in 1.2.0 for the AI module — `ai-discovery-export.js` (agentic surface
+Five Background-Script sensors ship in `tools/`: `security-log-export.js` (runtime activity),
+three added in 1.2.0 for the AI module — `ai-discovery-export.js` (agentic surface
 enumeration), `ai-bom-export.js` (agentic inventory), and `ai-usage-export.js` (permission
-envelope + invocation evidence). All four are pure sensors: no correlation logic, no verdicts.
-See §Running scans → Running the log export below.
+envelope + invocation evidence) — and `bundle.js`, added in 1.3.0 for offline mode (the reads a
+connected scan makes, printed as one file to upload). All five are pure sensors: no correlation
+logic, no verdicts, and they run as Background Scripts without installation. The 49 configuration
+checks run as the scoped application `x_nowisor_isp`. See §Running scans → Running the log export
+and §Offline mode (upload) below.
 
 The full machine-readable inventory is in [`manifest.json`](./manifest.json).
 
@@ -130,7 +133,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.2.1) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.0) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -171,6 +174,53 @@ Navigate to **Instance Scan → Scheduled Scans**, create a new scheduled scan, 
 5. The script prints a JSON envelope under the `---NOWISOR_LOGEXPORT---` separator. Copy the full output for ingestion by the nowisor advisor.
 
 The script is **read-only and safe for production** — it queries audit / event / transaction tables only and does not write anywhere. The lookback window (`LOOKBACK_DAYS = 7`) and per-category row cap (`ROW_CAP = 300`) are configurable at the top of the script. Connect the log export to the advisor by pasting both the scan output and the log export into the **Active Risk Report** on nowisor.com.
+
+## Offline mode (upload)
+
+Offline mode — run the scan yourself, upload the results
+
+Use this if your instance is self-hosted, on-prem, or you prefer not to grant API access.
+Nothing connects to your instance from outside. No credentials leave your organisation.
+
+1. Run [`tools/bundle.js`](./tools/bundle.js) as a Background Script (**System Definition →
+   Scripts - Background**) with an admin account, in a sub-production instance first, then
+   production. It needs no installation; the 49 configuration checks of the scan pack's scoped
+   application `x_nowisor_isp` are not required for upload. Output is printed only at the end; if
+   the page times out, run again in a quieter window.
+2. It prints the bundle and its SHA-256. Save everything between `---NOWISOR_BUNDLE---` and
+   `---NOWISOR_BUNDLE_END---` as `nowisor-scan-bundle.json` (the whole output page is accepted
+   too). Note the hash — it appears in every report as the integrity reference: it proves the file
+   was not changed after the script wrote it. The printed run-by account and instance ID are the
+   attribution.
+3. Review the bundle before sending it. It contains configuration property values (password-type
+   and secret-shaped values redacted in-instance before the file is written), ACL script and
+   condition text, the list of users holding admin and security_admin roles (username, full name,
+   last login), scheduled-job run-as accounts, OAuth application names, knowledge base titles and
+   MID Server hostnames, script include and credential record names (no bodies, no secrets), plugin
+   and application inventory, and table and field metadata. It does not contain platform passwords, tickets, CMDB records or end-user
+   records. Script text is copied as-is: anything a developer wrote into an ACL script — including
+   a hardcoded secret — will be in the file, so review it. Bundle processing is covered by the
+   Nowisor DPA; the bundle is processed and stored in the EU and deleted 30 days after upload.
+4. Upload the bundle in **Instances → Upload results**. Pick the instance or create it.
+5. Findings, the posture map and reports appear exactly as for a connected instance, stamped
+   "Posture as of &lt;capture date&gt;". The Active Risk view is built from the pack's scan output
+   and log export, as it is for a connected instance.
+
+What differs from a connected instance
+
+- No check requires a live call to your instance. If one is ever added, it will show as
+  'Not assessable from upload' — never guessed.
+- Posture is a point-in-time capture. Re-run and re-upload on your own cadence; quarterly is
+  what Self-Hosted Assurance assumes.
+- Uploads older than 30 days show findings as conditional and withhold CVE answers until you
+  re-upload; older than 90 days are refused.
+- Bundle files are processed and stored in the EU and deleted 30 days after upload.
+
+The printed JSON escapes spaces, `<`, `>`, `&` and non-ASCII characters as `\uXXXX` so that a
+browser copy cannot alter it; any JSON viewer shows the plain text. The SHA-256 is taken over the
+canonical JSON of the document (keys sorted, no whitespace) without its `sha256` field; the advisor
+recomputes it and refuses a file that was changed. `bundle.js` is read-only: `GlideRecordSecure`
+queries and `GlideAggregate` counts, nothing written.
 
 ## Reading findings
 
@@ -316,6 +366,8 @@ Pack versions follow semver:
 
 ### Changelog
 
+**1.3.0 (2026-09-25)** — New sensor `tools/bundle.js` (offline mode, bundle schema 1): performs in-instance the Table API reads the advisor's connected scan makes and prints them as one `nowisor-scan-bundle.json` with its SHA-256, for upload by customers who do not grant API access. Raw reads only; password-type and secret-shaped property values are redacted before printing. Registered in `manifest.json` `tools[]`. Check count unchanged (49). Every tool's `PACK_VERSION` moves to 1.3.0; no other tool changed.
+
 **1.2.1 (2026-09-10)** — `nowisor-external-auth-policy` 1.0.1: removed a sentinel-guarded read of a per-SSO enable property that does not exist on any release (adjudicated fabricated 2026-04-28), which could never fire and read like a signal. SSO detection is the `sso_properties` active-row count alone — where the Multi-Provider SSO plugin is inactive the table is absent and the check exits as no-SSO (measured on Australia P3 `dev371429`). The real `glide.authenticate.multissov2_feature.enabled` (verified on the Zurich P6 capture + ServiceNow docs) is now reported as finding evidence `multisso_v2_feature_enabled`; it says the plugin is at v2, not that an IdP is configured, so it never decides the finding. Check count unchanged (49).
 
 **1.2.0 (2026-08-01)** — Added the **AI and agent security** check group (17 checks, `nowisor-ai-*`): 9 inventory checks (AIA-001..009) covering agent ownership, review trail, shadow-AI endpoints, sub-production posture, dormant grants, shared execution identities, elevated run-as, ungoverned inbound MCP / Action Fabric agents, and AI Control Tower registry coverage; plus 8 static guardrail and governance-posture checks (AIG-001..008). Three new sensors: `ai-discovery-export.js`, `ai-bom-export.js`, `ai-usage-export.js`.
@@ -399,7 +451,7 @@ read anything from the advisor account.
 ### "No findings produced after scan"
 
 - **Suite not bootstrapped.** Run `bootstrap/install-suite.js`. Without it, the platform's full-scan engine never executes the checks.
-- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.2.1; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
+- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.0; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
 - **Cross-scope read denied.** If scan_check_execution records show "permission denied" on Global tables, your instance enforces strict scope isolation. The pack ships 17 `CrossScopePrivilege` records — verify they were committed in the update set.
 
 ### "Build fails with TypeScript errors in keys.ts"
@@ -447,7 +499,7 @@ if (cur.split(',').indexOf('nowisor') === -1) {
 gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
 ```
 
-Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.2.1). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.0). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
 
 If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
 
