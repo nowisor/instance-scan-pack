@@ -182,29 +182,26 @@ Offline mode — run the scan yourself, upload the results
 Use this if your instance is self-hosted, on-prem, or you prefer not to grant API access.
 Nothing connects to your instance from outside. No credentials leave your organisation.
 
-1. Run [`tools/bundle.js`](./tools/bundle.js) as a Background Script (**System Definition →
-   Scripts - Background**) with an admin account, in a sub-production instance first, then
-   production. It needs no installation; the 49 configuration checks of the scan pack's scoped
-   application `x_nowisor_isp` are not required for upload. Output is printed only at the end; if
-   the page times out, run again in a quieter window.
-2. It prints the bundle and its SHA-256. Save everything between `---NOWISOR_BUNDLE---` and
-   `---NOWISOR_BUNDLE_END---` as `nowisor-scan-bundle.json` (the whole output page is accepted
-   too). Note the hash — it appears in every report as the integrity reference: it proves the file
-   was not changed after the script wrote it. The printed run-by account and instance ID are the
-   attribution.
-3. Review the bundle before sending it. It contains configuration property values (password-type
-   and secret-shaped values redacted in-instance before the file is written), ACL script and
-   condition text, the list of users holding admin and security_admin roles (username, full name,
-   last login), scheduled-job run-as accounts, OAuth application names, knowledge base titles and
-   MID Server hostnames, script include and credential record names (no bodies, no secrets), plugin
-   and application inventory, and table and field metadata. It does not contain platform passwords, tickets, CMDB records or end-user
-   records. Script text is copied as-is: anything a developer wrote into an ACL script — including
-   a hardcoded secret — will be in the file, so review it. Bundle processing is covered by the
-   Nowisor DPA; the bundle is processed and stored in the EU and deleted 30 days after upload.
-4. Upload the bundle in **Instances → Upload results**. Pick the instance or create it.
-5. Findings, the posture map and reports appear exactly as for a connected instance, stamped
-   "Posture as of &lt;capture date&gt;". The Active Risk view is built from the pack's scan output
-   and log export, as it is for a connected instance.
+1. Get the script — [`tools/bundle.js`](./tools/bundle.js) (in the app, **Instances → Upload results**
+   has Copy script and Download bundle.js, with the file's sha256 to compare against this one).
+2. In your instance: System Definition → Scripts - Background. Paste. Run script. (Sub-production
+   first, then production. Admin role required. Takes 2–3 min; output appears only at the end.)
+3. Copy everything between ---NOWISOR_BUNDLE--- and ---NOWISOR_BUNDLE_END--- into a file named
+   nowisor-scan-bundle.json (pasting the whole output page also works).
+4. Review the file —
+   <details>
+   <summary>what it contains</summary>
+   It contains configuration property values (password-type and secret-shaped values redacted
+   in-instance before the file is written), ACL script and condition text, the list of users holding
+   admin and security_admin roles (username, full name, last login), scheduled-job run-as accounts,
+   OAuth application names, knowledge base titles and MID Server hostnames, script include and
+   credential record names (no bodies, no secrets), plugin and application inventory, and table and
+   field metadata. It does not contain platform passwords, tickets, CMDB records or end-user records.
+   Script text is copied as-is: anything a developer wrote into an ACL script — including a hardcoded
+   secret — will be in the file, so review it. Bundle processing is covered by the Nowisor DPA; the
+   bundle is processed and stored in the EU and deleted 30 days after upload.
+   </details>
+5. Upload it below. Pick the instance or create it from the bundle's URL.
 
 What differs from a connected instance
 
@@ -215,6 +212,11 @@ What differs from a connected instance
 - Uploads older than 30 days show findings as conditional and withhold CVE answers until you
   re-upload; older than 90 days are refused.
 - Bundle files are processed and stored in the EU and deleted 30 days after upload.
+
+The SHA-256 the script prints appears in every report as the integrity reference: it proves the
+file was not changed after the script wrote it; the printed run-by account and instance ID are the
+attribution. `bundle.js` needs no installation — the 49 configuration checks of the scan pack's
+scoped application `x_nowisor_isp` are not required for upload.
 
 The printed JSON escapes spaces, `<`, `>`, `&` and non-ASCII characters as `\uXXXX` so that a
 browser copy cannot alter it; any JSON viewer shows the plain text. The SHA-256 is taken over the
