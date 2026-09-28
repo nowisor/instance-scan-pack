@@ -1,13 +1,13 @@
 {
   "pack_name": "nowisor-instance-scan-agent",
-  "pack_version": "1.3.1",
+  "pack_version": "1.3.2",
   "finding_schema_version": "v1",
   "logexport_schema_version": "v1",
   "aidiscovery_schema_version": "v1",
   "aibom_schema_version": "v1",
   "aiusage_schema_version": "v1",
   "bundle_schema_version": "1",
-  "release_date": "2026-09-27",
+  "release_date": "2026-09-28",
   "released_against": {
     "servicenow_releases": [
       "zurich",

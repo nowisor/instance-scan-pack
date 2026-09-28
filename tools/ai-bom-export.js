@@ -36,7 +36,7 @@
 
 (function aiBomExport() {
     var SCHEMA_VERSION = 'v1'
-    var PACK_VERSION = '1.3.1'
+    var PACK_VERSION = '1.3.2'
     var ENTITY_CAP = 200
     var FIELD_CAP = 200
 
