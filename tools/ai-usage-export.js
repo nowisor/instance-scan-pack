@@ -40,7 +40,7 @@
 
 (function aiUsageExport() {
     var SCHEMA_VERSION = 'v1'
-    var PACK_VERSION = '1.3.2'
+    var PACK_VERSION = '1.3.3'
     var LOOKBACK_DAYS = 90
     var ROW_CAP = 200
     var MAX_QUERIES = 400

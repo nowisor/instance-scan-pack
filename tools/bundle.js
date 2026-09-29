@@ -39,7 +39,7 @@
 
 (function nowisorBundle() {
     var BUNDLE_SCHEMA = 1
-    var PACK_VERSION = '1.3.2'
+    var PACK_VERSION = '1.3.3'
     var TOOL_VERSION = '1.0.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
@@ -608,6 +608,12 @@
     }, true)
     table('sys_store_app', {
         sysparm_fields: 'name,active,version',
+        sysparm_limit: '50',
+        sysparm_query: LIKE
+    }, true)
+    // probe 2: scopes between Store apps and plugins
+    table('sys_scope', {
+        sysparm_fields: 'name,active',
         sysparm_limit: '50',
         sysparm_query: LIKE
     }, true)
