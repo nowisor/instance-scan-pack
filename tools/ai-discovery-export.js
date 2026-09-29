@@ -40,7 +40,7 @@
 
 (function aiDiscoveryExport() {
     var SCHEMA_VERSION = 'v1'
-    var PACK_VERSION = '1.3.3'
+    var PACK_VERSION = '1.3.4'
     var TABLE_CAP = 400
     var ROW_CAP = 200
     var SAMPLE_CAP = 50

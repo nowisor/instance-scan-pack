@@ -39,7 +39,7 @@
 
 (function nowisorBundle() {
     var BUNDLE_SCHEMA = 1
-    var PACK_VERSION = '1.3.3'
+    var PACK_VERSION = '1.3.4'
     var TOOL_VERSION = '1.0.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
