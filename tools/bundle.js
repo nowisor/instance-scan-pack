@@ -39,7 +39,7 @@
 
 (function nowisorBundle() {
     var BUNDLE_SCHEMA = 1
-    var PACK_VERSION = '1.3.5'
+    var PACK_VERSION = '1.3.6'
     var TOOL_VERSION = '1.0.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
@@ -722,7 +722,10 @@
     }
     var offset = 0
     for (var pg = 0; pg < 10; pg++) {
+        // Password-typed properties are never read (WI-CONN-1): the app's
+        // fingerprint skips them, and the connection role cannot read them.
         var props = table('sys_properties', {
+            sysparm_query: 'type!=password^type!=password2',
             sysparm_fields: 'name,value,type',
             sysparm_limit: '5000',
             sysparm_offset: String(offset)
