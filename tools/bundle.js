@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v1.0.0 - emits nowisor-scan-bundle schema 1
+// nowisor bundle tool v1.1.0 - emits nowisor-scan-bundle schema 1
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -39,8 +39,8 @@
 
 (function nowisorBundle() {
     var BUNDLE_SCHEMA = 1
-    var PACK_VERSION = '1.3.6'
-    var TOOL_VERSION = '1.0.0'
+    var PACK_VERSION = '1.3.7'
+    var TOOL_VERSION = '1.1.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     var PRINT_CHUNK = 4000
@@ -185,8 +185,10 @@
     function glideCount(path, query) {
         try {
             var ga = new GlideAggregate(path)
-            if (query) {
-                ga.addEncodedQuery(query)
+            // A count does not order: ORDERBY terms are dropped from it.
+            var cq = String(query || '').replace(/\^ORDERBY(DESC)?[\w.]+/g, '')
+            if (cq) {
+                ga.addEncodedQuery(cq)
             }
             ga.addAggregate('COUNT')
             ga.query()
@@ -351,6 +353,112 @@
         return parts.join('^OR')
     }
 
+    // --- A check's read carries its predicate (lib/check-reads.js) ----------
+    // The subset a check needs is selected by the query and paged to the
+    // end: a count of the whole table, then 1000-row pages by offset until
+    // the predicate's total is covered (at most 50 pages). Every read
+    // records its total, so the advisor judges each one complete or short.
+    var CHECK_PAGE = 1000
+    var MAX_CHECK_PAGES = 50
+    var PII_TABLES = ['sys_user', 'sn_hr_core_profile']
+    var AUDIT_TABLES = ['sys_user', 'sys_user_has_role']
+    AUDIT_TABLES.push('sys_user_grmember', 'discovery_credentials')
+    var piiQ = 'active=true^operation=read^nameIN' + PII_TABLES.join(',')
+    for (var pt = 0; pt < PII_TABLES.length; pt++) {
+        piiQ += '^ORnameSTARTSWITH' + PII_TABLES[pt] + '.'
+    }
+    var ACL_EMPTY = 'conditionISEMPTY^scriptISEMPTY'
+    var CHECK_READS = {
+        aclEmpty: {
+            table: 'sys_security_acl',
+            query: 'active=true^' + ACL_EMPTY,
+            fields: 'sys_id,name,operation'
+        },
+        aclEmptyRoles: {
+            table: 'sys_security_acl_role',
+            query: 'sys_security_acl.active=true'
+                + '^sys_security_acl.conditionISEMPTY'
+                + '^sys_security_acl.scriptISEMPTY',
+            fields: 'sys_security_acl'
+        },
+        aclScripted: {
+            table: 'sys_security_acl',
+            query: 'active=true^scriptISNOTEMPTY',
+            fields: 'sys_id,name,operation,script'
+        },
+        aclWildcard: {
+            table: 'sys_security_acl',
+            query: 'active=true^nameLIKE*^ORoperation=*',
+            fields: 'name,operation'
+        },
+        aclPiiRead: {
+            table: 'sys_security_acl',
+            query: piiQ,
+            fields: 'sys_id,name,operation,condition,script'
+        },
+        auditBaseline: {
+            table: 'sys_dictionary',
+            query: 'nameIN' + AUDIT_TABLES.join(',') + '^element=NULL',
+            fields: 'name,audit'
+        },
+        jobsRunAs: {
+            table: 'sysauto_script',
+            query: 'run_asISNOTEMPTY',
+            fields: 'name,run_as,run_as.user_name,active'
+        }
+    }
+
+    // The unfiltered count of a table is read once, however many checks
+    // read that table.
+    var counted = {}
+
+    // Returns { result } (every page's rows) or { error }.
+    function checkRead(spec) {
+        if (!counted.hasOwnProperty(spec.table)) {
+            counted[spec.table] = table(spec.table, {
+                sysparm_fields: 'sys_id',
+                sysparm_limit: '1'
+            }, true)
+        }
+        if (counted[spec.table].error) {
+            return { error: counted[spec.table].error }
+        }
+        var rows = []
+        var pages = 1
+        var failed = null
+        // A page that fails does not stop the pages planned after it: the
+        // advisor requests them all at once, and a page the file lacks
+        // would refuse the upload instead of failing this one section.
+        for (var pg = 0; pg < pages; pg++) {
+            var ans = table(spec.table, {
+                sysparm_query: spec.query + '^ORDERBYsys_id',
+                sysparm_fields: spec.fields,
+                sysparm_limit: String(CHECK_PAGE),
+                sysparm_offset: String(pg * CHECK_PAGE)
+            }, true)
+            if (ans.error) {
+                if (pg === 0) {
+                    return { error: ans.error }
+                }
+                if (!failed) {
+                    failed = ans.error
+                }
+                continue
+            }
+            if (pg === 0 && typeof ans.total === 'number') {
+                pages = Math.ceil(ans.total / CHECK_PAGE)
+                pages = Math.min(Math.max(1, pages), MAX_CHECK_PAGES)
+            }
+            for (var i = 0; i < ans.result.length; i++) {
+                rows.push(ans.result[i])
+            }
+        }
+        if (failed) {
+            return { error: failed }
+        }
+        return { result: rows }
+    }
+
     // --- The collector's reads (lib/sn-client.js collectSnapshot) ------------
     var HARDENING = ['glide.script.use.sandbox', 'glide.security.use_csrf_token']
     HARDENING.push('glide.basicauth.required.scriptedprocessor')
@@ -403,15 +511,9 @@
             sysparm_limit: '1'
         }, true)
     }
-    // ACL summary
-    var cand = table('sys_security_acl', {
-        sysparm_query: 'active=true^conditionISEMPTY^scriptISEMPTY',
-        sysparm_fields: 'sys_id,name,type,operation',
-        sysparm_limit: '500'
-    })
-    if (!cand.error && cand.result.length > 0) {
-        roleGated(cand.result)
-    }
+    // ACL-001: the empty ACLs and the role rows on them, both paged
+    var aclEmpty = checkRead(CHECK_READS.aclEmpty)
+    checkRead(CHECK_READS.aclEmptyRoles)
     table('sys_script_include', {
         sysparm_query: 'client_callable=true^active=true',
         sysparm_fields: 'name,api_name,access',
@@ -430,11 +532,6 @@
         sysparm_fields: 'harc_name,risk_score,score_impact,compliance_status',
         sysparm_limit: '500'
     })
-    table('sys_security_acl', {
-        sysparm_query: 'active=true^scriptISNOTEMPTY^scriptCONTAINSreturn true',
-        sysparm_fields: 'name,operation,script',
-        sysparm_limit: '200'
-    })
     // admin role holders
     table('sys_user_has_role', {
         sysparm_query: ADMIN_Q,
@@ -449,8 +546,8 @@
     // OAuth applications
     table('oauth_entity', {
         sysparm_query: 'active=true',
-        sysparm_fields: 'name,type,grant_type,access_token_lifespan,'
-            + 'refresh_token_lifespan',
+        sysparm_fields: 'name,type,default_grant_type,inbound_grant_type,'
+            + 'access_token_lifespan,refresh_token_lifespan',
         sysparm_limit: '100'
     })
     // identity governance
@@ -528,16 +625,9 @@
         sysparm_fields: 'name,source',
         sysparm_limit: '500'
     })
-    table('sysauto_script', {
-        sysparm_query: 'ORDERBYDESCsys_updated_on',
-        sysparm_fields: 'name,run_as,run_as.user_name,active',
-        sysparm_limit: '500'
-    })
-    table('sys_dictionary', {
-        sysparm_query: 'audit=true^element=',
-        sysparm_fields: 'name',
-        sysparm_limit: '500'
-    })
+    // JOB-001, AUDIT-001
+    checkRead(CHECK_READS.jobsRunAs)
+    checkRead(CHECK_READS.auditBaseline)
     table('sys_properties', {
         sysparm_query: nameOr(SESSION),
         sysparm_fields: 'name,value',
@@ -557,14 +647,13 @@
         sysparm_fields: 'name,element,column_label,internal_type',
         sysparm_limit: '1000'
     })
-    var detailed = table('sys_security_acl', {
-        sysparm_query: 'active=true',
-        sysparm_fields: 'sys_id,name,type,operation,condition,script',
-        sysparm_limit: '2000'
-    })
-    if (!detailed.error) {
-        roleGated(detailed.result)
+    // ACL-002 / ACL-008 (with the role rows on the scripted ACLs), ACL-003, ACL-005
+    var scripted = checkRead(CHECK_READS.aclScripted)
+    if (!scripted.error) {
+        roleGated(scripted.result)
     }
+    checkRead(CHECK_READS.aclWildcard)
+    checkRead(CHECK_READS.aclPiiRead)
     var encIds = []
     for (var e = 0; e < ENC_PLUGINS.length; e++) {
         encIds.push('id=' + ENC_PLUGINS[e])
@@ -587,7 +676,7 @@
         sysparm_limit: '25'
     }, true)
     // No posture at all: the connected scan then asks one control question.
-    var aclDenied = cand.error && cand.error.code === 'INSUFFICIENT_PERMISSIONS'
+    var aclDenied = aclEmpty.error && aclEmpty.error.code === 'INSUFFICIENT_PERMISSIONS'
     var propDenied = hard.error && hard.error.code === 'INSUFFICIENT_PERMISSIONS'
     if (aclDenied && propDenied) {
         table('sys_user', { sysparm_fields: 'sys_id', sysparm_limit: '1' })
@@ -724,8 +813,10 @@
     for (var pg = 0; pg < 10; pg++) {
         // Password-typed properties are never read (WI-CONN-1): the app's
         // fingerprint skips them, and the connection role cannot read them.
+        // An empty type is asked for explicitly: type!=password does not
+        // match it, and dropped glide.war (WI-READ-5b).
         var props = table('sys_properties', {
-            sysparm_query: 'type!=password^type!=password2',
+            sysparm_query: 'typeNOT INpassword,password2^ORtypeISEMPTY',
             sysparm_fields: 'name,value,type',
             sysparm_limit: '5000',
             sysparm_offset: String(offset)
@@ -734,6 +825,66 @@
             break
         }
         offset += 5000
+    }
+    // The properties a rule measures, and the build identity, read by name
+    // in one request with no type filter (lib/baseline/rule-property-names.js).
+    // A name not returned is counted on its own only when the read came
+    // back short of its total.
+    var RULE_PROPS = ['glide.attachment.role', 'glide.authenticate.external']
+    RULE_PROPS.push('glide.authenticate.multifactor')
+    RULE_PROPS.push('glide.authenticate.multisso.enabled')
+    var BA = ['api', 'csv', 'databrokerrestapiprocessor', 'excel']
+    BA.push('importprocessor', 'jsonv2', 'pdf', 'rss', 'schema')
+    BA.push('scriptedprocessor', 'soap', 'unl', 'wsdl', 'xml')
+    BA.push('xmloutputprocessor', 'xsd')
+    for (var b = 0; b < BA.length; b++) {
+        RULE_PROPS.push('glide.basicauth.required.' + BA[b])
+    }
+    RULE_PROPS.push('glide.buildtag', 'glide.buildtag.last')
+    RULE_PROPS.push('glide.cms.catalog.enable_category_security')
+    RULE_PROPS.push('glide.communicate.allow_all_for_unauthenticated')
+    RULE_PROPS.push('glide.db.impersonation.readonly')
+    RULE_PROPS.push('glide.email.inbound.strip_scripts')
+    RULE_PROPS.push('glide.login.home.sso_button')
+    RULE_PROPS.push('glide.rest.rate_limit.enabled')
+    RULE_PROPS.push('glide.rest.rate_limit.max_requests_per_minute')
+    RULE_PROPS.push('glide.script.use.sandbox')
+    RULE_PROPS.push('glide.security.file.mime_type.validation')
+    RULE_PROPS.push('glide.security.strict_elevate_privilege')
+    RULE_PROPS.push('glide.security.use_csrf_token')
+    RULE_PROPS.push('glide.sys.session.secure', 'glide.ui.secure_cookies')
+    RULE_PROPS.push('glide.ui.session_timeout', 'glide.war')
+    var byName = table('sys_properties', {
+        sysparm_query: 'nameIN' + RULE_PROPS.join(','),
+        sysparm_fields: 'name,value,type',
+        sysparm_limit: String(RULE_PROPS.length * 2)
+    }, true)
+    if (!byName.error) {
+        var seen = {}
+        var namedEvery = true
+        for (var bn = 0; bn < byName.result.length; bn++) {
+            var bname = byName.result[bn].name
+            if (typeof bname !== 'string' || bname === '') {
+                namedEvery = false
+            } else {
+                seen[bname] = true
+            }
+        }
+        var whole = namedEvery
+        if (typeof byName.total === 'number') {
+            whole = whole && byName.result.length >= byName.total
+        }
+        if (!whole) {
+            for (var rp = 0; rp < RULE_PROPS.length; rp++) {
+                if (!seen[RULE_PROPS[rp]]) {
+                    table('sys_properties', {
+                        sysparm_query: 'name=' + RULE_PROPS[rp],
+                        sysparm_fields: 'name',
+                        sysparm_limit: '1'
+                    }, true)
+                }
+            }
+        }
     }
     var INV = [['sys_store_app'], ['sys_scope']]
     for (var iv = 0; iv < INV.length; iv++) {
