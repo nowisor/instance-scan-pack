@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.3.7
+- **Pack version:** 1.3.8
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -133,7 +133,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.7) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.8) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -228,17 +228,20 @@ queries and `GlideAggregate` counts, nothing written.
 
 ### What the script reads
 
-Every read `tools/bundle.js` records — 62 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. Each read runs as a GlideRecordSecure query, or a GlideAggregate count where it asks for a row count; nothing is written. This section is generated from the inventory and the script; it is not typed.
+Every read `tools/bundle.js` records — 54 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. Each read runs as a GlideRecordSecure query, or a GlideAggregate count where it asks for a row count; nothing is written. This section is generated from the inventory and the script; it is not typed.
 
 | Part | Table | Query | Fields | Rows per request | When |
 |---|---|---|---|---|---|
 | posture | `sys_properties` | `name=glide.script.use.sandbox^ORname=glide.security.use_csrf_token^ORname=glide.basicauth.required.scriptedprocessor^ORname=glide.ui.session_timeout^ORname=glide.security.strict_elevate_privilege^ORname=glide.ui.secure_cookies^ORname=glide.security.file.mime_type.validation^ORname=glide.attachment.role` | `name,value` | 50 | every run |
+| posture | `sys_security_acl` | `active=true^conditionISEMPTY^scriptISEMPTY` | `sys_id,name,type,operation` | 500 | every run |
 | posture | `sys_script_include` | `client_callable=true^active=true` | `name,api_name,access` | 200 | every run |
 | posture | `sys_script` | `active=true` | `sys_id` | 1 | every run |
 | posture | `discovery_credentials` | — | `name,type,target_type` | 100 | every run |
 | posture | `sn_vsc_instance_hardening_settings` | — | `harc_name,risk_score,score_impact,compliance_status` | 500 | every run |
+| posture | `sys_security_acl` | `active=true^scriptISNOTEMPTY^scriptCONTAINSreturn true` | `name,operation,script` | 200 | every run |
 | posture | `sys_user_has_role` | `role.name=admin^state=active^user.active=true` | `user.user_name,user.last_login_time,user.name` | 500 | every run |
 | posture | `sys_user_has_role` | `role.name=security_admin^state=active^user.active=true` | `sys_id` | 1 | every run |
+| posture | `oauth_entity` | `active=true` | `name,type,grant_type,access_token_lifespan,refresh_token_lifespan` | 100 | every run |
 | posture | `kb_knowledge_base` | `active=true` | `title,sys_id` | 20 | every run |
 | posture | `ecc_agent` | `status=Up` | `name,status,version,host_name,validated` | 50 | every run |
 | posture | `sys_db_object` | `super_class.name=sys_import_set_row` | `name,label` | 200 | every run |
@@ -250,9 +253,12 @@ Every read `tools/bundle.js` records — 62 distinct reads — listed from the a
 | posture | `sys_ws_definition` | `active=true` | `name,api_id,enforced,version,active,sys_scope.name` | 1000 | every run |
 | posture | `sys_ws_operation` | `active=true` | `name,http_method,operation_uri,enforce_acl,enforced,web_service_definition.name` | 5000 | every run |
 | posture | `sys_plugins` | `active=active` | `name,source` | 500 | every run |
+| posture | `sysauto_script` | `ORDERBYDESCsys_updated_on` | `name,run_as,run_as.user_name,active` | 500 | every run |
+| posture | `sys_dictionary` | `audit=true^element=` | `name` | 500 | every run |
 | posture | `sys_properties` | `name=glide.ui.session_timeout^ORname=glide.authenticate.multifactor^ORname=glide.authenticate.external^ORname=glide.authenticate.multisso.enabled` | `name,value` | 10 | every run |
 | posture | `sys_properties` | `name=glide.basicauth.required.api^ORname=glide.basicauth.required.soap^ORname=glide.basicauth.required.scriptedprocessor^ORname=glide.basicauth.required.jsonv2^ORname=glide.basicauth.required.csv^ORname=glide.basicauth.required.excel^ORname=glide.basicauth.required.importprocessor^ORname=glide.basicauth.required.pdf^ORname=glide.basicauth.required.rss^ORname=glide.basicauth.required.schema^ORname=glide.basicauth.required.unl^ORname=glide.basicauth.required.wsdl^ORname=glide.basicauth.required.xml^ORname=glide.basicauth.required.xsd^ORname=glide.basicauth.required.xmloutputprocessor^ORname=glide.basicauth.required.databrokerrestapiprocessor` | `name,value` | 50 | every run |
 | posture | `sys_dictionary` | `elementLIKEpassword^ORelementLIKEsecret^ORelementLIKEtoken^ORelementLIKEkey^ORelementLIKEcredential^ORcolumn_labelLIKEpassword^ORcolumn_labelLIKEsecret^ORcolumn_labelLIKEtoken` | `name,element,column_label,internal_type` | 1000 | every run |
+| posture | `sys_security_acl` | `active=true` | `sys_id,name,type,operation,condition,script` | 2000 | every run |
 | posture | `v_plugin` | `id=com.glide.encryption.core^ORid=com.snc.db_encryption^ORid=com.glide.column_encryption` | `id,name,active` | 20 | every run |
 | posture | `sys_user_has_role` | `role.name=admin^state=active^user.active=true` | `user.user_name,user.name` | 1000 | every run |
 | posture | `sys_user_has_role` | `role.name=security_admin^state=active^user.active=true` | `user.user_name,user.name,user.last_login_time` | 1000 | every run |
@@ -263,18 +269,6 @@ Every read `tools/bundle.js` records — 62 distinct reads — listed from the a
 | posture | `kb_uc_can_read_mtom` | `kb_knowledge_base=<each active KB sys_id>` | `user_criteria.name` | 10 | one read per active KB returned |
 | posture | `sys_dictionary` | `internal_type=encrypted_text^ORinternal_type=password2` | `sys_id` | 1 | the v_plugin encryption-plugin read succeeded |
 | posture | `oauth_credential` | `type=access_token^sys_created_on>=<now − 90 days>` | `peer` | 10000 | every run |
-| posture | `sys_security_acl` | `active=true^conditionISEMPTY^scriptISEMPTY^ORDERBYsys_id` | `sys_id,name,operation` | 1000, paged | every run |
-| posture | `sys_security_acl_role` | `sys_security_acl.active=true^sys_security_acl.conditionISEMPTY^sys_security_acl.scriptISEMPTY^ORDERBYsys_id` | `sys_security_acl` | 1000, paged | every run |
-| posture | `sys_security_acl` | `active=true^scriptISNOTEMPTY^ORDERBYsys_id` | `sys_id,name,operation,script` | 1000, paged | every run |
-| posture | `sys_security_acl` | `active=true^nameLIKE*^ORoperation=*^ORDERBYsys_id` | `name,operation` | 1000, paged | every run |
-| posture | `sys_security_acl` | `active=true^operation=read^nameINsys_user,sn_hr_core_profile^ORnameSTARTSWITHsys_user.^ORnameSTARTSWITHsn_hr_core_profile.^ORDERBYsys_id` | `sys_id,name,operation,condition,script` | 1000, paged | every run |
-| posture | `sys_dictionary` | `nameINsys_user,sys_user_has_role,sys_user_grmember,discovery_credentials^element=NULL^ORDERBYsys_id` | `name,audit` | 1000, paged | every run |
-| posture | `sysauto_script` | `run_asISNOTEMPTY^ORDERBYsys_id` | `name,run_as,run_as.user_name,active` | 1000, paged | every run |
-| posture | `sys_security_acl` | — | `sys_id` | 1 | every run |
-| posture | `sys_security_acl_role` | — | `sys_id` | 1 | every run |
-| posture | `sys_dictionary` | — | `sys_id` | 1 | every run |
-| posture | `sysauto_script` | — | `sys_id` | 1 | every run |
-| posture | `oauth_entity` | `active=true` | `name,type,default_grant_type,inbound_grant_type,access_token_lifespan,refresh_token_lifespan` | 100 | every run |
 | AI surface | `sys_db_object` | `nameINsn_aia_agent,sn_mcp_server,sys_mcp_server` | `name` | 10 | every run |
 | AI surface | `sys_store_app` | `nameLIKENow Assist^ORnameLIKEGenerative AI^ORnameLIKEAI Agent^ORnameLIKEControl Tower^ORnameLIKEBuild Agent` | `name,active,version` | 50 | every run |
 | AI surface | `sys_scope` | `nameLIKENow Assist^ORnameLIKEGenerative AI^ORnameLIKEAI Agent^ORnameLIKEControl Tower^ORnameLIKEBuild Agent` | `name,active` | 50 | every run |
@@ -285,9 +279,7 @@ Every read `tools/bundle.js` records — 62 distinct reads — listed from the a
 | release reading | `v_plugin` | — | `id,name,version,active,description,link_version` | 2000 | every run |
 | release reading | `sys_db_object` | `nameIN<SECURITY_CORE_TABLES + control YAML tables, chunks of 80>` | `name,label,super_class,sys_scope` | 500 | every run |
 | release reading | `sys_dictionary` | `nameIN<tables found, chunks of 40>^element!=NULL` | `name,element,column_label,internal_type,max_length,mandatory,read_only,reference` | 10000 | every run |
-| release reading | `sys_properties` | `typeNOT INpassword,password2^ORtypeISEMPTY` | `name,value,type` | 5000, paged | every run |
-| release reading | `sys_properties` | `nameINglide.attachment.role,glide.authenticate.external,glide.authenticate.multifactor,glide.authenticate.multisso.enabled,glide.basicauth.required.api,glide.basicauth.required.csv,glide.basicauth.required.databrokerrestapiprocessor,glide.basicauth.required.excel,glide.basicauth.required.importprocessor,glide.basicauth.required.jsonv2,glide.basicauth.required.pdf,glide.basicauth.required.rss,glide.basicauth.required.schema,glide.basicauth.required.scriptedprocessor,glide.basicauth.required.soap,glide.basicauth.required.unl,glide.basicauth.required.wsdl,glide.basicauth.required.xml,glide.basicauth.required.xmloutputprocessor,glide.basicauth.required.xsd,glide.buildtag,glide.buildtag.last,glide.cms.catalog.enable_category_security,glide.communicate.allow_all_for_unauthenticated,glide.db.impersonation.readonly,glide.email.inbound.strip_scripts,glide.login.home.sso_button,glide.rest.rate_limit.enabled,glide.rest.rate_limit.max_requests_per_minute,glide.script.use.sandbox,glide.security.file.mime_type.validation,glide.security.strict_elevate_privilege,glide.security.use_csrf_token,glide.sys.session.secure,glide.ui.secure_cookies,glide.ui.session_timeout,glide.war` | `name,value,type` | 74 | every run |
-| release reading | `sys_properties` | `name=<each rule property the by-name read did not return, when it came back short>` | `name` | 1 | the by-name read came back short of its total (one count read per name it did not return) |
+| release reading | `sys_properties` | `type!=password^type!=password2` | `name,value,type` | 5000, paged | every run |
 | release reading | `sys_store_app` (row count) | — | — | — | every run |
 | release reading | `sys_store_app` | — | `name,version,active,scope,sys_id` | 2000, paged | every run |
 | release reading | `sys_scope` (row count) | — | — | — | every run |
@@ -441,7 +433,9 @@ Pack versions follow semver:
 
 ### Changelog
 
-**1.3.7 (2026-10-10)** — offline bundle (`tools/bundle.js` 1.1.0): the bundle makes the reads the advisor's connected scan now makes. The ACL, audit and scheduled-job checks read the rows they judge selected in the query and paged to the end — 1,000-row pages by offset, at most 50 — with the row count recorded on every page, in place of capped samples of whole tables (ACL-001/002/003/005/008, AUDIT-001, JOB-001). The properties a rule measures and the build identity are read by name in one request, with a per-name count only where that read came back short. The property walk asks for empty-typed properties explicitly (`typeNOT INpassword,password2^ORtypeISEMPTY`): `type!=password` does not match an empty type, so the 1.3.6 filter left out every empty-typed property, `glide.war` among them; password-typed properties are still never read. The OAuth read asks for `default_grant_type` and `inbound_grant_type` (the table has no `grant_type` column). The return-true ACL script read is dropped from the bundle: no rule scored it. Bundles from 1.3.6 and earlier are still accepted and replayed through the older reads they carry. The README now lists every read the script makes, generated from the advisor's read inventory. No change to any check, manifest check entry or bundle schema (still 1). Check count unchanged (49).
+**1.3.8 (2026-10-10)** — offline bundle: **1.3.7 is withdrawn.** `tools/bundle.js` returns to the 1.3.6 read plan (bundle tool 1.0.0); only the pack version it prints changes. The 1.3.7 bundle paged every empty ACL, every role row on the empty ACLs and every wildcard and scripted ACL to completion — about 90,000 rows on a stock instance (dev433526, Zurich Patch 10: 39,536 empty ACLs, 37,946 role rows on them). At 2.5–7.7 s per 1,000 rows in-instance it cannot finish inside the roughly 300-second limit of the Scripts - Background page, which answered HTTP 504 and printed no bundle. The 1.3.8 bundle was run on dev433526 before release: 219.7 s, 81 reads — about 80 s inside the page limit. A bundle from 1.3.8 (or 1.3.6) is replayed by the advisor through the older reads it carries, as before. The read plan of the uploaded path is redesigned before it changes again. No change to any check, manifest check entry or bundle schema (still 1). Check count unchanged (49).
+
+**1.3.7 (2026-10-10, withdrawn — see 1.3.8)** — offline bundle (`tools/bundle.js` 1.1.0): the bundle makes the reads the advisor's connected scan now makes. The ACL, audit and scheduled-job checks read the rows they judge selected in the query and paged to the end — 1,000-row pages by offset, at most 50 — with the row count recorded on every page, in place of capped samples of whole tables (ACL-001/002/003/005/008, AUDIT-001, JOB-001). The properties a rule measures and the build identity are read by name in one request, with a per-name count only where that read came back short. The property walk asks for empty-typed properties explicitly (`typeNOT INpassword,password2^ORtypeISEMPTY`): `type!=password` does not match an empty type, so the 1.3.6 filter left out every empty-typed property, `glide.war` among them; password-typed properties are still never read. The OAuth read asks for `default_grant_type` and `inbound_grant_type` (the table has no `grant_type` column). The return-true ACL script read is dropped from the bundle: no rule scored it. Bundles from 1.3.6 and earlier are still accepted and replayed through the older reads they carry. The README now lists every read the script makes, generated from the advisor's read inventory. No change to any check, manifest check entry or bundle schema (still 1). Check count unchanged (49).
 
 **1.3.6 (2026-10-02)** — offline bundle: the release-fingerprint property read (`tools/bundle.js`) now skips password-typed properties (`type!=password^type!=password2`), matching the nowisor app's own read (WI-CONN-1). Their values were already redacted in-instance; now they are never read at all, so a bundle carries no password-typed property, redacted or otherwise. No change to any check, manifest entry or bundle schema (still 1). Check count unchanged (49).
 
@@ -549,7 +543,7 @@ read anything from the advisor account.
 ### "No findings produced after scan"
 
 - **Suite not bootstrapped.** Run `bootstrap/install-suite.js`. Without it, the platform's full-scan engine never executes the checks.
-- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.7; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
+- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.8; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
 - **Cross-scope read denied.** If scan_check_execution records show "permission denied" on Global tables, your instance enforces strict scope isolation. The pack ships 17 `CrossScopePrivilege` records — verify they were committed in the update set.
 
 ### "Build fails with TypeScript errors in keys.ts"
@@ -597,7 +591,7 @@ if (cur.split(',').indexOf('nowisor') === -1) {
 gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
 ```
 
-Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.7). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.8). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
 
 If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
 
