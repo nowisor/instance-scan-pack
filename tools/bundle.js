@@ -30,7 +30,12 @@
 // attribution.
 //
 // Run it as an admin. Every read is a GlideRecordSecure query (the rows the
-// running user may read) or a GlideAggregate count. Nothing is written.
+// running user may read) or a GlideAggregate count - except the check reads
+// added in pack 1.3.9 (the exposure, private-scope, typed dictionary and
+// upgrade-history reads), which are plain GlideRecord queries: an admin's
+// GlideRecordSecure query drops rows, so the read comes back short of its
+// total. The mixed state is deliberate until the in-instance read plan is
+// redesigned. Nothing is written.
 //
 // Verified identifiers: the tables and fields are the ones the advisor's
 // connected scan reads (published at nowisor.com/access), no others.
@@ -39,8 +44,8 @@
 
 (function nowisorBundle() {
     var BUNDLE_SCHEMA = 1
-    var PACK_VERSION = '1.3.8'
-    var TOOL_VERSION = '1.0.0'
+    var PACK_VERSION = '1.3.9'
+    var TOOL_VERSION = '1.2.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     var PRINT_CHUNK = 4000
@@ -199,8 +204,25 @@
         }
     }
 
-    function glideTable(path, params, wantCount) {
-        var gr = new GlideRecordSecure(path)
+    // A count of a plain read is taken once per query, without its ORDERBY.
+    var plainCounts = {}
+
+    function plainCount(path, query) {
+        var cq = query.replace(/\^?ORDERBY(DESC)?[a-z0-9_.]+/g, '')
+        var ck = path + '|' + cq
+        if (!plainCounts.hasOwnProperty(ck)) {
+            plainCounts[ck] = glideCount(path, cq)
+        }
+        return plainCounts[ck]
+    }
+
+    function glideTable(path, params, wantCount, plain) {
+        var gr = null
+        if (plain) {
+            gr = new GlideRecord(path)
+        } else {
+            gr = new GlideRecordSecure(path)
+        }
         if (!gr.isValid()) {
             return { error: { code: 'SN_API_ERROR:400', message: 'Invalid table ' + path } }
         }
@@ -237,7 +259,9 @@
             rows.push(row)
         }
         var total = null
-        if (wantCount) {
+        if (wantCount && plain) {
+            total = plainCount(path, query)
+        } else if (wantCount) {
             total = glideCount(path, query)
         }
         return { result: rows, total_count: total }
@@ -263,14 +287,15 @@
     // Returns { result, total } or { error }. Never throws. `wantCount` asks for
     // the row total (the Table API's X-Total-Count) - only on the reads whose
     // total the advisor uses; a COUNT on every read would scan each table twice.
-    function table(path, params, wantCount) {
+    // `plain` (pack 1.3.9 check reads only) reads with GlideRecord.
+    function table(path, params, wantCount, plain) {
         var p = copy(params)
         var ans = null
         try {
             if (hook) {
                 ans = hook('table', path, p)
             } else {
-                ans = glideTable(path, p, wantCount)
+                ans = glideTable(path, p, wantCount, plain)
             }
         } catch (e) {
             ans = { error: { code: 'SN_API_ERROR:500', message: String(e) } }
@@ -592,6 +617,70 @@
     if (aclDenied && propDenied) {
         table('sys_user', { sysparm_fields: 'sys_id', sysparm_limit: '1' })
     }
+
+    // --- Check reads (vsme-app lib/check-reads.js CHECK_READS), pack 1.3.9 ---
+    // Made as the advisor's readCheck replays them: the table's unfiltered
+    // count, then 1,000-row pages ordered by sys_id, each with the total.
+    // Page 0 always; further pages only when the total says there are more
+    // rows, at most 50 (the advisor's own cap). Every planned page is recorded
+    // even after one fails: the advisor asks for them concurrently, and a page
+    // missing from the bundle would refuse the whole upload, not this read.
+    // Plain GlideRecord, admin-run.
+    var CHECK_PAGE = 1000
+    var CHECK_MAX_PAGES = 50
+    var unfiltered = {}
+
+    function checkPage(path, query, fields, offset) {
+        return table(path, {
+            sysparm_query: query + '^ORDERBYsys_id',
+            sysparm_fields: fields,
+            sysparm_limit: String(CHECK_PAGE),
+            sysparm_offset: String(offset)
+        }, true, true)
+    }
+
+    function checkRead(path, query, fields) {
+        if (!unfiltered.hasOwnProperty(path)) {
+            unfiltered[path] = true
+            table(path, { sysparm_fields: 'sys_id', sysparm_limit: '1' }, true, true)
+        }
+        var first = checkPage(path, query, fields, 0)
+        if (first.error || first.total === null) {
+            return
+        }
+        var needed = Math.ceil(first.total / CHECK_PAGE)
+        if (needed > CHECK_MAX_PAGES) {
+            needed = CHECK_MAX_PAGES
+        }
+        for (var cp = 1; cp < needed; cp++) {
+            checkPage(path, query, fields, cp * CHECK_PAGE)
+        }
+    }
+
+    // EXP-001 / EXP-002 / EXP-005: operations with the checkbox cleared
+    var WS_GATE = 'active=true^requires_acl_authorization=false'
+    var WS_FIELDS = 'sys_id,name,http_method,operation_uri,relative_path,'
+    WS_FIELDS += 'requires_acl_authorization,requires_authentication,'
+    WS_FIELDS += 'enforce_acl,sys_policy,sys_created_on,sys_package,'
+    WS_FIELDS += 'sys_package.name,sys_package.sys_class_name,'
+    WS_FIELDS += 'web_service_definition,web_service_definition.name'
+    checkRead('sys_ws_operation', WS_GATE, WS_FIELDS)
+    // R-READ-9: the gate rows in private scopes, and the =false count
+    var PRIV = 'sys_package.ref_sys_scope.private'
+    checkRead('sys_ws_operation', WS_GATE + '^' + PRIV + '=true', 'sys_id')
+    table('sys_ws_operation', {
+        sysparm_query: WS_GATE + '^' + PRIV + '=false',
+        sysparm_fields: 'sys_id',
+        sysparm_limit: '1'
+    }, true, true)
+    // Origin rule (d): the upgrade windows
+    checkRead('sys_upgrade_history', 'upgrade_startedISNOTEMPTY',
+        'upgrade_started,upgrade_finished')
+    // DATA-006: the secret-name read, typed to the clear-text types
+    var DICT_TYPED = dict + '^internal_typeINstring,string_full_utf8,html,'
+    DICT_TYPED += 'translated_text'
+    checkRead('sys_dictionary', DICT_TYPED,
+        'name,element,column_label,internal_type')
 
     // --- The capabilities probe (lib/capabilities-probe.js PROBE_TARGETS) ---
     var TERMS = ['Now Assist', 'Generative AI', 'AI Agent', 'Control Tower']
