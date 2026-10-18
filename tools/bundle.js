@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v1.0.0 - emits nowisor-scan-bundle schema 1
+// nowisor bundle tool v1.3.0 - emits nowisor-scan-bundle schema 1
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -32,10 +32,15 @@
 // Run it as an admin. Every read is a GlideRecordSecure query (the rows the
 // running user may read) or a GlideAggregate count - except the check reads
 // added in pack 1.3.9 (the exposure, private-scope, typed dictionary and
-// upgrade-history reads), which are plain GlideRecord queries: an admin's
-// GlideRecordSecure query drops rows, so the read comes back short of its
-// total. The mixed state is deliberate until the in-instance read plan is
-// redesigned. Nothing is written.
+// upgrade-history reads) and pack 1.3.10 (the origin fields on the ACL,
+// script-include, job and dictionary reads, the four counted dynamic-code
+// pattern reads, the table-origin read and the knowledge-base reads), which
+// are plain GlideRecord queries: an admin's GlideRecordSecure query drops
+// rows, so the read comes back short of its total. The 500-row empty-ACL
+// summary read also carries origin fields since 1.3.10 but stays a
+// GlideRecordSecure query with no total, so the advisor treats it as a floor
+// ("at least N"), never the whole set. The mixed state is deliberate until
+// the in-instance read plan is redesigned. Nothing is written.
 //
 // Verified identifiers: the tables and fields are the ones the advisor's
 // connected scan reads (published at nowisor.com/access), no others.
@@ -44,8 +49,14 @@
 
 (function nowisorBundle() {
     var BUNDLE_SCHEMA = 1
-    var PACK_VERSION = '1.3.9'
-    var TOOL_VERSION = '1.2.0'
+    // ACL-001's paged reads - every empty ACL and the role rows on them -
+    // are the largest reads and may not fit the ~300 s Background Script
+    // page on a large instance. OFF by default. To include them, set this
+    // to true before you run (R-PACK-1: run OFF first, then ON, and record
+    // both timings). OFF: the bundle carries the smaller ACL reads only.
+    var READ_EMPTY_ACLS = false
+    var PACK_VERSION = '1.3.10'
+    var TOOL_VERSION = '1.3.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     var PRINT_CHUNK = 4000
@@ -273,6 +284,19 @@
 
     // --- Recording --------------------------------------------------------
     var reads = []
+    // Per-read timing (owner, 2026-10-17: a run killed at 10 min had no way
+    // to say where its time went). One entry per read: its index in reads,
+    // table, page offset and elapsed ms. No query text, so no user name.
+    var timings = []
+
+    function timed(t0, path, params) {
+        timings.push({
+            i: reads.length - 1,
+            path: path,
+            offset: String((params || {}).sysparm_offset || '0'),
+            ms: new Date().getTime() - t0
+        })
+    }
 
     function copy(params) {
         var out = {}
@@ -289,6 +313,7 @@
     // total the advisor uses; a COUNT on every read would scan each table twice.
     // `plain` (pack 1.3.9 check reads only) reads with GlideRecord.
     function table(path, params, wantCount, plain) {
+        var t0 = new Date().getTime()
         var p = copy(params)
         var ans = null
         try {
@@ -302,6 +327,7 @@
         }
         if (ans.error) {
             reads.push({ kind: 'table', path: path, params: p, error: ans.error })
+            timed(t0, path, p)
             return { error: ans.error }
         }
         var rows = redactRows(path, ans.result || [])
@@ -312,16 +338,19 @@
         var entry = { kind: 'table', path: path, params: p, result: rows }
         entry.total_count = total
         reads.push(entry)
+        timed(t0, path, p)
         return { result: rows, total: total }
     }
 
     function stats(path) {
+        var t0 = new Date().getTime()
         var ans = hook ? hook('stats', path, { sysparm_count: 'true' }) : glideStats(path)
         var count = typeof ans.count === 'number' ? ans.count : null
         reads.push({
             kind: 'stats', path: path,
             params: { sysparm_count: 'true' }, count: count
         })
+        timed(t0, path, {})
         return count
     }
 
@@ -409,7 +438,6 @@
 
     var LIKE_PATTERNS = ['eval(', 'new Function(', 'GlideEvaluator']
     LIKE_PATTERNS.push('GlideScopedEvaluator')
-    LIKE_PATTERNS.push('setWorkflow(false)')
 
     var ADMIN_Q = 'role.name=admin^state=active^user.active=true'
     var SECADMIN_Q = 'role.name=security_admin^state=active^user.active=true'
@@ -429,9 +457,13 @@
         }, true)
     }
     // ACL summary
+    // pack 1.3.10: with the origin fields, so an upload without ACL-001's
+    // paged reads still splits the first 500 by origin
     var cand = table('sys_security_acl', {
         sysparm_query: 'active=true^conditionISEMPTY^scriptISEMPTY',
-        sysparm_fields: 'sys_id,name,type,operation',
+        sysparm_fields: 'sys_id,name,type,operation,sys_package,'
+            + 'sys_package.name,sys_package.sys_class_name,sys_policy,'
+            + 'sys_created_on',
         sysparm_limit: '500'
     })
     if (!cand.error && cand.result.length > 0) {
@@ -471,11 +503,46 @@
         sysparm_fields: 'sys_id',
         sysparm_limit: '1'
     }, true)
-    // OAuth applications
+    // pack 1.3.10: each admin holder's web-service-only flag, and for every such
+    // account its transactions over 90 days (the count only)
+    var wsa = table('sys_user_has_role', {
+        sysparm_query: ADMIN_Q,
+        sysparm_fields: 'user.user_name,user.web_service_access_only',
+        sysparm_limit: '500'
+    })
+    if (!wsa.error) {
+        var since90 = new Date(capturedMs - 90 * DAY_MS).toISOString()
+        since90 = since90.slice(0, 19).replace('T', ' ')
+        var wsaUsers = []
+        for (var w = 0; w < wsa.result.length; w++) {
+            var wr = wsa.result[w]
+            var wu = wr['user.user_name']
+            // a name that would rewrite the encoded query is not read
+            // (the app does not ask it either)
+            var wsaFlag = String(wr['user.web_service_access_only'])
+            var safeName = wu && !/[\^,=]/.test(wu)
+            if (safeName && wsaFlag === 'true') {
+                if (wsaUsers.indexOf(wu) === -1) {
+                    wsaUsers.push(wu)
+                }
+            }
+        }
+        wsaUsers.sort()
+        for (var wx = 0; wx < wsaUsers.length; wx++) {
+            table('syslog_transaction', {
+                sysparm_query: 'sys_created_by=' + wsaUsers[wx]
+                    + '^sys_created_on>=' + since90,
+                sysparm_fields: 'sys_id,sys_created_by,sys_created_on',
+                sysparm_limit: '1'
+            }, true)
+        }
+    }
+    // OAuth applications (pack 1.3.10: the grant-type columns the instance
+    // has - default_grant_type, inbound_grant_type; there is no grant_type)
     table('oauth_entity', {
         sysparm_query: 'active=true',
-        sysparm_fields: 'name,type,grant_type,access_token_lifespan,'
-            + 'refresh_token_lifespan',
+        sysparm_fields: 'name,type,default_grant_type,inbound_grant_type,'
+            + 'access_token_lifespan,refresh_token_lifespan',
         sysparm_limit: '100'
     })
     // identity governance
@@ -504,21 +571,7 @@
             sysparm_limit: '10000'
         })
     }
-    // knowledge base access
-    var kbs = table('kb_knowledge_base', {
-        sysparm_query: 'active=true',
-        sysparm_fields: 'title,sys_id',
-        sysparm_limit: '20'
-    })
-    if (!kbs.error) {
-        for (var k = 0; k < kbs.result.length; k++) {
-            table('kb_uc_can_read_mtom', {
-                sysparm_query: 'kb_knowledge_base=' + kbs.result[k].sys_id,
-                sysparm_fields: 'user_criteria.name',
-                sysparm_limit: '10'
-            })
-        }
-    }
+    // knowledge base access: the check reads below (pack 1.3.10)
     table('ecc_agent', {
         sysparm_query: 'status=Up',
         sysparm_fields: 'name,status,version,host_name,validated',
@@ -529,14 +582,7 @@
         sysparm_fields: 'name,label',
         sysparm_limit: '200'
     })
-    for (var l = 0; l < LIKE_PATTERNS.length; l++) {
-        table('sys_script_include', {
-            sysparm_query: 'client_callable=true^active=true^scriptLIKE'
-                + LIKE_PATTERNS[l],
-            sysparm_fields: 'name',
-            sysparm_limit: '200'
-        })
-    }
+    // dynamic code patterns: the four counted check reads below (pack 1.3.10)
     table('sys_ws_definition', {
         sysparm_query: 'active=true',
         sysparm_fields: 'name,api_id,enforced,version,active,sys_scope.name',
@@ -551,16 +597,6 @@
     table('sys_plugins', {
         sysparm_query: 'active=active',
         sysparm_fields: 'name,source',
-        sysparm_limit: '500'
-    })
-    table('sysauto_script', {
-        sysparm_query: 'ORDERBYDESCsys_updated_on',
-        sysparm_fields: 'name,run_as,run_as.user_name,active',
-        sysparm_limit: '500'
-    })
-    table('sys_dictionary', {
-        sysparm_query: 'audit=true^element=',
-        sysparm_fields: 'name',
         sysparm_limit: '500'
     })
     table('sys_properties', {
@@ -582,14 +618,6 @@
         sysparm_fields: 'name,element,column_label,internal_type',
         sysparm_limit: '1000'
     })
-    var detailed = table('sys_security_acl', {
-        sysparm_query: 'active=true',
-        sysparm_fields: 'sys_id,name,type,operation,condition,script',
-        sysparm_limit: '2000'
-    })
-    if (!detailed.error) {
-        roleGated(detailed.result)
-    }
     var encIds = []
     for (var e = 0; e < ENC_PLUGINS.length; e++) {
         encIds.push('id=' + ENC_PLUGINS[e])
@@ -646,15 +674,25 @@
         }
         var first = checkPage(path, query, fields, 0)
         if (first.error || first.total === null) {
-            return
+            return null
         }
         var needed = Math.ceil(first.total / CHECK_PAGE)
         if (needed > CHECK_MAX_PAGES) {
             needed = CHECK_MAX_PAGES
         }
+        // the rows of every page, for a read whose rows the app looks up
+        // further; null when a page failed (the app then looks up nothing)
+        var rows = (first.result || []).slice()
+        var failed = false
         for (var cp = 1; cp < needed; cp++) {
-            checkPage(path, query, fields, cp * CHECK_PAGE)
+            var page = checkPage(path, query, fields, cp * CHECK_PAGE)
+            if (page.error) {
+                failed = true
+            } else {
+                rows = rows.concat(page.result || [])
+            }
         }
+        return failed ? null : rows
     }
 
     // EXP-001 / EXP-002 / EXP-005: operations with the checkbox cleared
@@ -663,7 +701,10 @@
     WS_FIELDS += 'requires_acl_authorization,requires_authentication,'
     WS_FIELDS += 'enforce_acl,sys_policy,sys_created_on,sys_package,'
     WS_FIELDS += 'sys_package.name,sys_package.sys_class_name,'
-    WS_FIELDS += 'web_service_definition,web_service_definition.name'
+    WS_FIELDS += 'web_service_definition,web_service_definition.name,'
+    // pack 1.3.10: the definition's namespace and whether it is active
+    WS_FIELDS += 'web_service_definition.namespace,'
+    WS_FIELDS += 'web_service_definition.active'
     checkRead('sys_ws_operation', WS_GATE, WS_FIELDS)
     // R-READ-9: the gate rows in private scopes, and the =false count
     var PRIV = 'sys_package.ref_sys_scope.private'
@@ -673,6 +714,8 @@
         sysparm_fields: 'sys_id',
         sysparm_limit: '1'
     }, true, true)
+    // pack 1.3.10: the reader app's own package, from its health table's row
+    checkRead('sys_db_object', 'name=x_nowisor_vsme_health', 'name,sys_package')
     // Origin rule (d): the upgrade windows
     checkRead('sys_upgrade_history', 'upgrade_startedISNOTEMPTY',
         'upgrade_started,upgrade_finished')
@@ -680,7 +723,73 @@
     var DICT_TYPED = dict + '^internal_typeINstring,string_full_utf8,html,'
     DICT_TYPED += 'translated_text'
     checkRead('sys_dictionary', DICT_TYPED,
-        'name,element,column_label,internal_type')
+        'name,element,column_label,internal_type,sys_scope')
+
+    // --- Check reads added in pack 1.3.10 (WI-ENG-7) -------------------------
+    // The origin fields every origin-split rule classifies a record by.
+    var ORIGIN = 'sys_package,sys_package.name,sys_package.sys_class_name,'
+    ORIGIN += 'sys_policy,sys_created_on'
+    // DATA-006: the origin of the table each typed row names
+    checkRead('sys_db_object', 'nameISNOTEMPTY', 'name,sys_scope,' + ORIGIN)
+    // INJ-001: one counted read per evaluation pattern
+    var INJ_BASE = 'client_callable=true^active=true^scriptLIKE'
+    for (var ij = 0; ij < LIKE_PATTERNS.length; ij++) {
+        checkRead('sys_script_include', INJ_BASE + LIKE_PATTERNS[ij],
+            'sys_id,name,api_name,' + ORIGIN)
+    }
+    // JOB-001: jobs that run as a named user, with their origin
+    checkRead('sysauto_script', 'run_asISNOTEMPTY',
+        'name,run_as,run_as.user_name,active,' + ORIGIN)
+    // ACL-009: every active base, every Can Read row, the reach signals
+    checkRead('kb_knowledge_base', 'active=true', 'sys_id,title,active')
+    checkRead('kb_uc_can_read_mtom', 'kb_knowledge_baseISNOTEMPTY',
+        'kb_knowledge_base,user_criteria')
+    checkRead('user_criteria', 'roleISNOTEMPTY', 'sys_id,role')
+    checkRead('sys_user_role', 'name=public', 'sys_id,name')
+    checkRead('sp_page', 'idINkb_home,kb_article_view,kb_search', 'id,public')
+    // the company code and the no-criteria property, by name, counted
+    var OPROPS = 'nameINglide.appcreator.company.code,'
+    OPROPS += 'glide.knowman.block_access_with_no_user_criteria'
+    table('sys_properties', {
+        sysparm_query: OPROPS,
+        sysparm_fields: 'name,value',
+        sysparm_limit: '4'
+    }, true)
+    // ACL-003: wildcard rules, with their origin
+    checkRead('sys_security_acl', 'active=true^nameLIKE*^ORoperation=*',
+        'name,operation,' + ORIGIN)
+    // ACL-002 / ACL-008: every active rule with a script, paged with its
+    // total (the 2,000-row sample earlier packs sent is not evidence)
+    var scripted = checkRead('sys_security_acl', 'active=true^scriptISNOTEMPTY',
+        'sys_id,name,operation,script')
+    if (scripted) {
+        roleGated(scripted)
+    }
+    // ACL-005: the read rules on the PII tables and their fields
+    var PII = 'active=true^operation=read'
+    PII += '^nameINsys_user,sn_hr_core_profile'
+    PII += '^ORnameSTARTSWITHsys_user.'
+    PII += '^ORnameSTARTSWITHsn_hr_core_profile.'
+    var piiRead = checkRead('sys_security_acl', PII,
+        'sys_id,name,operation,condition,script')
+    if (piiRead) {
+        roleGated(piiRead)
+    }
+    // AUDIT-001: the collection row of each baseline table
+    var AUD = 'nameINsys_user,sys_user_has_role,sys_user_grmember,'
+    AUD += 'discovery_credentials^element=NULL'
+    checkRead('sys_dictionary', AUD, 'name,audit')
+    // ACL-001: the empty rules and the role rows on them, both paged - the
+    // largest reads, last
+    if (READ_EMPTY_ACLS) {
+        var ACL_EMPTY = 'active=true^conditionISEMPTY^scriptISEMPTY'
+        checkRead('sys_security_acl', ACL_EMPTY,
+            'sys_id,name,operation,' + ORIGIN)
+        var ACL_ROLES = 'sys_security_acl.active=true'
+        ACL_ROLES += '^sys_security_acl.conditionISEMPTY'
+        ACL_ROLES += '^sys_security_acl.scriptISEMPTY'
+        checkRead('sys_security_acl_role', ACL_ROLES, 'sys_security_acl')
+    }
 
     // --- The capabilities probe (lib/capabilities-probe.js PROBE_TARGETS) ---
     var TERMS = ['Now Assist', 'Generative AI', 'AI Agent', 'Control Tower']
@@ -824,13 +933,15 @@
         }
         offset += 5000
     }
-    var INV = [['sys_store_app'], ['sys_scope']]
+    // pack 1.3.10: sys_scope with its private flag and its vendor
+    var INV_BASE = 'name,version,active,scope,sys_id'
+    var INV = [['sys_store_app', INV_BASE], ['sys_scope', INV_BASE + ',private,vendor']]
     for (var iv = 0; iv < INV.length; iv++) {
         var itab = INV[iv][0]
         stats(itab)
         for (var ip = 0; ip < 50; ip++) {
             var page = table(itab, {
-                sysparm_fields: 'name,version,active,scope,sys_id',
+                sysparm_fields: INV[iv][1],
                 sysparm_limit: '2000',
                 sysparm_offset: String(ip * 2000)
             })
@@ -880,6 +991,7 @@
         bundle_schema: BUNDLE_SCHEMA,
         pack_version: PACK_VERSION,
         tool_version: TOOL_VERSION,
+        read_empty_acls: READ_EMPTY_ACLS,
         captured_at: capturedAt,
         instance_url: base,
         instance_id: String(gs.getProperty('instance_id', '')),
@@ -893,8 +1005,10 @@
             user_name: String(gs.getUserName())
         },
         duration_ms: new Date().getTime() - startMs,
-        reads: reads
+        reads: reads,
+        timings: timings
     }
+    var serializeStart = new Date().getTime()
     var canonical = JSON.stringify(sortKeys(doc))
     var hash = String(new GlideDigest().getSHA256Hex(canonical)).toLowerCase()
     doc.sha256 = hash
@@ -906,14 +1020,27 @@
 
     gs.print('nowisor bundle schema ' + BUNDLE_SCHEMA)
     gs.print('pack ' + PACK_VERSION)
+    gs.print('empty ACL reads ' + (READ_EMPTY_ACLS ? 'ON' : 'OFF'))
     gs.print('instance ' + doc.instance_url + ' (' + doc.instance_id + ')')
     gs.print('captured ' + capturedAt + ' reads ' + reads.length)
     gs.print('SHA-256 ' + hash)
+    gs.print('reads ms ' + doc.duration_ms + ', serialize and hash ms '
+        + (new Date().getTime() - serializeStart))
+    var slow = timings.slice(0)
+    slow.sort(function (x, y) {
+        return y.ms - x.ms
+    })
+    for (var sl = 0; sl < slow.length && sl < 5; sl++) {
+        gs.print('slowest read ' + slow[sl].ms + ' ms ' + slow[sl].path
+            + ' offset ' + slow[sl].offset)
+    }
     gs.print('Save everything between the two markers as nowisor-scan-bundle.json')
     gs.print('')
+    var printStart = new Date().getTime()
     gs.print(SEPARATOR)
     for (var o = 0; o < out.length; o += PRINT_CHUNK) {
         gs.print(out.substring(o, o + PRINT_CHUNK))
     }
     gs.print(END_SEPARATOR)
+    gs.print('print ms ' + (new Date().getTime() - printStart) + ', characters ' + out.length)
 })()
