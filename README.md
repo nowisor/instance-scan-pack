@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.3.10
+- **Pack version:** 1.3.12
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -133,7 +133,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.10) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.12) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -185,7 +185,10 @@ Nothing connects to your instance from outside. No credentials leave your organi
 1. Get the script — [`tools/bundle.js`](./tools/bundle.js) (in the app, **Instances → Upload results**
    has Copy script and Download bundle.js, with the file's sha256 to compare against this one).
 2. In your instance: System Definition → Scripts - Background. Paste. Run script. (Sub-production
-   first, then production. Admin role required. Takes 2–3 min; output appears only at the end.)
+   first, then production. Admin role required. Takes 2–3 min; output appears only at the end. The
+   script starts no read after 240 s: a read it did not reach is recorded as not read, and the checks
+   that rest on it are reported UNKNOWN — never passed. The output says whether the cap was reached
+   and where the time went, section by section.)
    The script's largest reads — every empty ACL and its role rows — are off as shipped; to include
    them, change `var READ_EMPTY_ACLS = false` to `true` at the top before you run. The output line
    `empty ACL reads ON` or `OFF` says which ran.
@@ -221,10 +224,15 @@ file was not changed after the script wrote it; the printed run-by account and i
 attribution. `bundle.js` needs no installation — the 49 configuration checks of the scan pack's
 scoped application `x_nowisor_isp` are not required for upload.
 
-The printed JSON escapes spaces, `<`, `>`, `&` and non-ASCII characters as `\uXXXX` so that a
-browser copy cannot alter it; any JSON viewer shows the plain text. The SHA-256 is taken over the
-canonical JSON of the document (keys sorted, no whitespace) without its `sha256` field; the advisor
-recomputes it and refuses a file that was changed. `bundle.js` is read-only: plain `GlideRecord`
+The file is printed one section per line (bundle schema 2, pack 1.3.12): a `header` line, a
+`timings` line, one `read` line per read (a long read continues on `rows` lines), and an `end` line —
+so no line, and no single string inside the instance, has to hold the whole bundle. Each line is
+`<section> <json>`; the JSON escapes spaces, `<`, `>`, `&` and non-ASCII characters as `\uXXXX` so
+that a browser copy cannot alter it. Within a read, rows are printed column by column, a reference
+is printed as its value (the advisor rebuilds the Table API link), and a record's package is printed
+once per read. The SHA-256 is taken over each line's canonical JSON (keys sorted, no whitespace),
+chained in order; the advisor recomputes it and refuses a file that was changed, and refuses a
+malformed line by its line number and section. `bundle.js` is read-only: plain `GlideRecord`
 queries for the check reads added in 1.3.9 and 1.3.10, `GlideRecordSecure` queries for every other read, and
 `GlideAggregate` counts; nothing written.
 
@@ -232,7 +240,7 @@ queries for the check reads added in 1.3.9 and 1.3.10, `GlideRecordSecure` queri
 
 ### What the script reads
 
-Every read `tools/bundle.js` records — 82 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) and in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
+Every read `tools/bundle.js` records — 79 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) and in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
 
 | Part | Table | Query | Fields | Rows per request | When |
 |---|---|---|---|---|---|
@@ -248,7 +256,6 @@ Every read `tools/bundle.js` records — 82 distinct reads — listed from the a
 | posture | `ecc_agent` | `status=Up` | `name,status,version,host_name,validated` | 50 | every run |
 | posture | `sys_db_object` | `super_class.name=sys_import_set_row` | `name,label` | 200 | every run |
 | posture | `sys_ws_definition` | `active=true` | `name,api_id,enforced,version,active,sys_scope.name` | 1000 | every run |
-| posture | `sys_ws_operation` | `active=true` | `name,http_method,operation_uri,enforce_acl,enforced,web_service_definition.name` | 5000 | every run |
 | posture | `sys_ws_operation` | `active=true^requires_acl_authorization=false^ORDERBYsys_id` | `sys_id,name,http_method,operation_uri,relative_path,requires_acl_authorization,requires_authentication,enforce_acl,sys_policy,sys_created_on,sys_package,sys_package.name,sys_package.sys_class_name,web_service_definition,web_service_definition.name,web_service_definition.namespace,web_service_definition.active` | 1000, paged | every run |
 | posture | `sys_ws_operation` | — | `sys_id` | 1 | every run |
 | posture | `sys_ws_operation` | `active=true^requires_acl_authorization=false^sys_package.ref_sys_scope.private=true^ORDERBYsys_id` | `sys_id` | 1000, paged | every run |
@@ -258,16 +265,15 @@ Every read `tools/bundle.js` records — 82 distinct reads — listed from the a
 | posture | `sys_plugins` | `active=active` | `name,source` | 500 | every run |
 | posture | `sys_properties` | `name=glide.ui.session_timeout^ORname=glide.authenticate.multifactor^ORname=glide.authenticate.external^ORname=glide.authenticate.multisso.enabled` | `name,value` | 10 | every run |
 | posture | `sys_properties` | `name=glide.basicauth.required.api^ORname=glide.basicauth.required.soap^ORname=glide.basicauth.required.scriptedprocessor^ORname=glide.basicauth.required.jsonv2^ORname=glide.basicauth.required.csv^ORname=glide.basicauth.required.excel^ORname=glide.basicauth.required.importprocessor^ORname=glide.basicauth.required.pdf^ORname=glide.basicauth.required.rss^ORname=glide.basicauth.required.schema^ORname=glide.basicauth.required.unl^ORname=glide.basicauth.required.wsdl^ORname=glide.basicauth.required.xml^ORname=glide.basicauth.required.xsd^ORname=glide.basicauth.required.xmloutputprocessor^ORname=glide.basicauth.required.databrokerrestapiprocessor` | `name,value` | 50 | every run |
-| posture | `sys_dictionary` | `elementLIKEpassword^ORelementLIKEsecret^ORelementLIKEtoken^ORelementLIKEkey^ORelementLIKEcredential^ORcolumn_labelLIKEpassword^ORcolumn_labelLIKEsecret^ORcolumn_labelLIKEtoken` | `name,element,column_label,internal_type` | 1000 | every run |
 | posture | `sys_dictionary` | `elementLIKEpassword^ORelementLIKEsecret^ORelementLIKEtoken^ORelementLIKEkey^ORelementLIKEcredential^ORcolumn_labelLIKEpassword^ORcolumn_labelLIKEsecret^ORcolumn_labelLIKEtoken^internal_typeINstring,string_full_utf8,html,translated_text^ORDERBYsys_id` | `name,element,column_label,internal_type,sys_scope` | 1000, paged | every run |
-| posture | `v_plugin` | `id=com.glide.encryption.core^ORid=com.snc.db_encryption^ORid=com.glide.column_encryption` | `id,name,active` | 20 | every run |
+| posture | `sys_plugins` | `sourceINcom.glide.encryption.core,com.snc.db_encryption,com.glide.column_encryption` | `sys_id,name,source,active` | 20 | every run |
 | posture | `sys_user_has_role` | `role.name=admin^state=active^user.active=true` | `user.user_name,user.name` | 1000 | every run |
 | posture | `sys_user_has_role` | `role.name=security_admin^state=active^user.active=true` | `user.user_name,user.name,user.last_login_time` | 1000 | every run |
 | posture | `oauth_entity` | `active=true` | `sys_id,name,type,access_token_lifespan,refresh_token_lifespan` | 500 | every run |
 | posture | `sys_rate_limit_rules` | `active=true` | `name,sys_id` | 25 | every run |
 | posture | `sys_properties` | `nameLIKEpassword^ORnameLIKEcredential^ORnameLIKEsecret^ORnameLIKEapi_key` | `name` | 1 | every run |
 | posture | `sys_security_acl_role` | `sys_security_aclIN<ACL sys_ids, chunks of 100>` | `sys_security_acl` | 5000 | the ACL reads returned rows (one read per 100 sys_ids) |
-| posture | `sys_dictionary` | `internal_type=encrypted_text^ORinternal_type=password2` | `sys_id` | 1 | the v_plugin encryption-plugin read succeeded |
+| posture | `sys_dictionary` | `internal_type=encrypted_text^ORinternal_type=password2` | `sys_id` | 1 | the sys_plugins encryption-plugin read succeeded |
 | posture | `oauth_credential` | `type=access_token^sys_created_on>=<now − 90 days>` | `peer` | 10000 | every run |
 | posture | `sys_security_acl` | `active=true^conditionISEMPTY^scriptISEMPTY^ORDERBYsys_id` | `sys_id,name,operation,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | only when `READ_EMPTY_ACLS` is set to `true` (ACL-001's paged reads; off as shipped) |
 | posture | `sys_security_acl_role` | `sys_security_acl.active=true^sys_security_acl.conditionISEMPTY^sys_security_acl.scriptISEMPTY^ORDERBYsys_id` | `sys_security_acl` | 1000, paged | only when `READ_EMPTY_ACLS` is set to `true` (ACL-001's paged reads; off as shipped) |
@@ -294,7 +300,7 @@ Every read `tools/bundle.js` records — 82 distinct reads — listed from the a
 | posture | `sys_user_role` | `name=public^ORDERBYsys_id` | `sys_id,name` | 1000, paged | every run |
 | posture | `sp_page` | `idINkb_home,kb_article_view,kb_search^ORDERBYsys_id` | `id,public` | 1000, paged | every run |
 | posture | `sys_properties` | `nameINglide.appcreator.company.code,glide.knowman.block_access_with_no_user_criteria` | `name,value` | 4 | every run |
-| posture | `sys_db_object` | `nameISNOTEMPTY^ORDERBYsys_id` | `name,sys_scope,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | every run |
+| posture | `sys_db_object` | `nameIN<tables the typed secret-name rows name, chunks of 100>^ORDERBYsys_id` | `name,sys_scope,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000 | the typed secret-name read completed (one read per 100 table names) |
 | posture | `sys_script_include` | `client_callable=true^active=true^scriptLIKEeval(^ORDERBYsys_id` | `sys_id,name,api_name,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | every run |
 | posture | `sys_script_include` | `client_callable=true^active=true^scriptLIKEnew Function(^ORDERBYsys_id` | `sys_id,name,api_name,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | every run |
 | posture | `sys_script_include` | `client_callable=true^active=true^scriptLIKEGlideEvaluator^ORDERBYsys_id` | `sys_id,name,api_name,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | every run |
@@ -308,18 +314,26 @@ Every read `tools/bundle.js` records — 82 distinct reads — listed from the a
 | AI surface | `sys_properties` | `nameLIKEnowassist^ORnameLIKEgenerative_ai^ORnameLIKEsn_aia` | `name` | 1 | every run |
 | release reading | `sys_properties` | `name=glide.buildtag.last^ORname=glide.buildtag^ORname=instance_id^ORname=instance_name` | `name,value` | 10 | every run |
 | release reading | `/stats.do` (page) | — | — | — | never requested in an instance — recorded as unanswered when build tag or instance id missing after the sys_properties read |
-| release reading | `v_plugin` | — | `id,name,version,active,description,link_version` | 2000 | every run |
 | release reading | `sys_db_object` | `nameIN<SECURITY_CORE_TABLES + control YAML tables, chunks of 80>` | `name,label,super_class,sys_scope` | 500 | every run |
 | release reading | `sys_dictionary` | `nameIN<tables found, chunks of 40>^element!=NULL` | `name,element,column_label,internal_type,max_length,mandatory,read_only,reference` | 10000 | every run |
 | release reading | `sys_properties` | `type!=password^type!=password2` | `name,value,type` | 5000, paged | every run |
 | release reading | `sys_store_app` (row count) | — | — | — | every run |
 | release reading | `sys_store_app` | — | `name,version,active,scope,sys_id` | 2000, paged | every run |
 | release reading | `sys_scope` (row count) | — | — | — | every run |
-| release reading | `sys_plugins` | — | `sys_id,name,source,active,description,version` | 2000 | v_plugin refused (403) or absent (404) |
+| release reading | `sys_plugins` | — | `sys_id,name,source,active,description,version` | 2000 | every run |
 | release reading | `sys_scope` | — | `name,version,active,scope,sys_id,private,vendor` | 2000, paged | every run |
 | access diagnosis | `sys_user` | — | `sys_id` | 1 | sys_properties and sys_security_acl both refused (403) |
 
 <!-- END bundle-read-plan -->
+
+### Sizing probe (`tools/probe.js`)
+
+A read-only script that prints row counts only, for sizing the bundle before it is run. Paste it into
+Scripts - Background and run it as an admin. For each table that carries most of the bundle's size it prints the table's row total, the total of each query `bundle.js` reads that table with, and how
+many milliseconds each count took, plus the pack version and the instance's build string. Every number
+is a `GlideAggregate` count. `v_plugin` is not counted (probe 1.1.0, pack 1.3.12): the bundle no longer reads it, and a cold read of that view makes the platform rebuild it — 166 s, and platform writes to `v_plugin` and `sys_cache_flush`, in the 1.3.11 probe's run on dev433526; `sys_plugins`, which the bundle reads instead, is counted. It
+prints no row content, no names and no sys_ids, and writes nothing. A count that cannot be taken prints
+`unread`, never 0, and so does a table total of 0 for a table every instance populates (a count that failed silently).
 
 ## Reading findings
 
@@ -465,6 +479,10 @@ Pack versions follow semver:
 
 ### Changelog
 
+**1.3.12 (2026-10-19)** — offline bundle (`tools/bundle.js` 2.0.0, **bundle schema 2**): a customer instance's bundle stopped in Rhino ("String object would exceed maximum permitted size of 33554432") — schema 1 built the whole document as one string. Schema 2 prints one section per line, so no string holds the bundle. It is smaller: rows are printed column by column, a reference as its value, a record's package once per read; the two reads nothing used (the 5,000-row active REST operation read and the untyped 1,000-row secret-name dictionary read) are no longer made, and `sys_plugins.description` and the empty-ACL summary's `type` are asked for and not read. `sys_db_object` is read only for the tables the typed secret-name rows name, not every table (the advisor answers its own table-origin read with those rows; nothing reads another). Replayed over dev433526's run 6 (pack 1.3.10, 2026-10-18), the printed bundle is 3.3 M characters in 135 lines instead of 11.3 M in one document, with the same findings. The script starts no read after 240 s: a read not reached is recorded as not read, and its checks are UNKNOWN, never passed; the output prints the time per section, and whether and where the cap was reached, before the bundle. **Both plugin reads — the plugin list and DATA-003's encryption plugins — are made on `sys_plugins`; `v_plugin` is never read** — a view the platform rebuilds on a cold read (207 s on dev433526, which used the whole time budget), so the advisor answers its plugin reads from `sys_plugins` on an upload (and an upload's fingerprint is compared only with other uploads'). The advisor reads schema 1 and schema 2, from engine 1.53.0. Sizing probe 1.1.0: `sys_plugins` is counted in place of `v_plugin`. No change to any check or manifest check entry. Check count unchanged (49).
+
+**1.3.11 (2026-10-19)** — sizing probe (`tools/probe.js` 1.0.0, new): prints, for each table `tools/bundle.js` reads at size, the row total and the total of each query the bundle reads it with, the milliseconds each count took, the pack version and the build string. `v_plugin` is counted by row count (a remote table, filled by its own script). Counts only — no row content, no names, no sys_ids; nothing written. `tools/bundle.js` is unchanged apart from the pack version it prints (tool 1.3.0, same reads). No change to any check, manifest check entry or bundle schema (still 1). Check count unchanged (49).
+
 **1.3.10 (2026-10-16)** — offline bundle (`tools/bundle.js` 1.3.0): the bundle carries the reads an uploaded scan needs to tell customer-authored records from ServiceNow-shipped and third-party ones on INJ-001, ACL-001, ACL-003, JOB-001 and DATA-006, to count INJ-001 by pattern, and to decide ACL-009 on what was read. The reads added, each made the way the advisor's connected scan makes it (the table's row count, then 1,000-row pages ordered by `sys_id`, each carrying the total):
 - the origin fields (`sys_package`, its name and class, `sys_policy`, `sys_created_on`) on the permit-all ACL read and its role rows (those two reads — every empty ACL and its role rows — are the largest, and are made only when `READ_EMPTY_ACLS` is set to `true` at the top of the script; off as shipped), the wildcard ACL read, the job run-as read, and four client-callable script-include reads, one per evaluation pattern (`eval(`, `new Function(`, `GlideEvaluator`, `GlideScopedEvaluator`), each with its count;
 - `sys_dictionary.sys_scope` on the typed secret-name read, and `sys_db_object` with the origin fields of every table;
@@ -597,7 +615,7 @@ read anything from the advisor account.
 ### "No findings produced after scan"
 
 - **Suite not bootstrapped.** Run `bootstrap/install-suite.js`. Without it, the platform's full-scan engine never executes the checks.
-- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.10; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
+- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.12; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
 - **Cross-scope read denied.** If scan_check_execution records show "permission denied" on Global tables, your instance enforces strict scope isolation. The pack ships 17 `CrossScopePrivilege` records — verify they were committed in the update set.
 
 ### "Build fails with TypeScript errors in keys.ts"
@@ -645,7 +663,7 @@ if (cur.split(',').indexOf('nowisor') === -1) {
 gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
 ```
 
-Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.10). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.12). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
 
 If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
 
