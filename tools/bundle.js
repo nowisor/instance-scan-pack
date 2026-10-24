@@ -62,7 +62,7 @@
     // to true before you run (R-PACK-1: run OFF first, then ON, and record
     // both timings). OFF: the bundle carries the smaller ACL reads only.
     var READ_EMPTY_ACLS = false
-    var PACK_VERSION = '1.3.12'
+    var PACK_VERSION = '1.3.13'
     var TOOL_VERSION = '2.0.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'

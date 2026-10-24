@@ -6,12 +6,12 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.3.12
+- **Pack version:** 1.3.13
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
 - **Verified against:** ServiceNow Zurich Patch 6 (dev265484) and Australia Patch 2 (dev194572). On Australia the instance rejects the app as third-party until the pack's vendor key is trusted — one Background Script; see [Compatibility](#compatibility) / [Troubleshooting](#troubleshooting).
-- **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 to build and install from source (pinned 4.13.3 since 1.3.4; 4.4.0+ supports the Australia release). The installed app has no *runtime* SDK dependency, but every install path — including the pre-built package under `dist/` — uploads through the instance's app-client processor, which has its own server-side prerequisites (see [Troubleshooting → "Install fails — application was null"](#troubleshooting)).
+- **SDK requirement:** `@servicenow/sdk` ≥ 4.6.0 to build and install from source (pinned 4.14.0 since 1.3.13; 4.4.0+ supports the Australia release). The installed app has no *runtime* SDK dependency, but every install path — including the pre-built package under `dist/` — uploads through the instance's app-client processor, which has its own server-side prerequisites (see [Troubleshooting → "Install fails — application was null"](#troubleshooting)).
 
 ## What this is
 
@@ -133,7 +133,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.12) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.13) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -479,6 +479,8 @@ Pack versions follow semver:
 
 ### Changelog
 
+**1.3.13 (2026-10-24)** — dependency updates, no rule or engine changes. Build toolchain `@servicenow/sdk` 4.13.3 → 4.14.0, which carries patched `handlebars` (4.7.10), `fastify` (5.12.7), `@fastify/static` (10.1.3) and `joi` (17.13.8); the lockfile refresh also brings `source-map-js` 1.2.2. The `js-yaml@3` and `joi@17` pins are removed — the toolchain no longer carries a 3.x `js-yaml` and pins the patched `joi` itself. `undici@7` stays pinned, now to 7.30.1: the CLI pins 7.29.1, and three advisories published 2026-10-23, among them a denial of service, are fixed in 7.30.1, and `zod@4` is pinned to 4.6.6 (memory exhaustion validating oversized collections, fixed in 4.6.6; the toolchain pins 4.6.5). All dev-only: none of them is part of the installed app. `npm audit`: 0 vulnerabilities. Built with 4.14.0, the installed app differs from 1.3.12 in the version it carries and in two build records only: the SBOM names the 4.14.0 toolchain (and no longer carries a serial number or timestamp), and the packaged `package.json` carries the new toolchain and pins. No change to any check, script, manifest entry or bundle format. Check count unchanged (49).
+
 **1.3.12 (2026-10-19)** — offline bundle (`tools/bundle.js` 2.0.0, **bundle schema 2**): a customer instance's bundle stopped in Rhino ("String object would exceed maximum permitted size of 33554432") — schema 1 built the whole document as one string. Schema 2 prints one section per line, so no string holds the bundle. It is smaller: rows are printed column by column, a reference as its value, a record's package once per read; the two reads nothing used (the 5,000-row active REST operation read and the untyped 1,000-row secret-name dictionary read) are no longer made, and `sys_plugins.description` and the empty-ACL summary's `type` are asked for and not read. `sys_db_object` is read only for the tables the typed secret-name rows name, not every table (the advisor answers its own table-origin read with those rows; nothing reads another). Replayed over dev433526's run 6 (pack 1.3.10, 2026-10-18), the printed bundle is 3.3 M characters in 135 lines instead of 11.3 M in one document, with the same findings. The script starts no read after 240 s: a read not reached is recorded as not read, and its checks are UNKNOWN, never passed; the output prints the time per section, and whether and where the cap was reached, before the bundle. **Both plugin reads — the plugin list and DATA-003's encryption plugins — are made on `sys_plugins`; `v_plugin` is never read** — a view the platform rebuilds on a cold read (207 s on dev433526, which used the whole time budget), so the advisor answers its plugin reads from `sys_plugins` on an upload (and an upload's fingerprint is compared only with other uploads'). The advisor reads schema 1 and schema 2, from engine 1.53.0. Sizing probe 1.1.0: `sys_plugins` is counted in place of `v_plugin`. No change to any check or manifest check entry. Check count unchanged (49).
 
 **1.3.11 (2026-10-19)** — sizing probe (`tools/probe.js` 1.0.0, new): prints, for each table `tools/bundle.js` reads at size, the row total and the total of each query the bundle reads it with, the milliseconds each count took, the pack version and the build string. `v_plugin` is counted by row count (a remote table, filled by its own script). Counts only — no row content, no names, no sys_ids; nothing written. `tools/bundle.js` is unchanged apart from the pack version it prints (tool 1.3.0, same reads). No change to any check, manifest check entry or bundle schema (still 1). Check count unchanged (49).
@@ -615,7 +617,7 @@ read anything from the advisor account.
 ### "No findings produced after scan"
 
 - **Suite not bootstrapped.** Run `bootstrap/install-suite.js`. Without it, the platform's full-scan engine never executes the checks.
-- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.12; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
+- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.13; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
 - **Cross-scope read denied.** If scan_check_execution records show "permission denied" on Global tables, your instance enforces strict scope isolation. The pack ships 17 `CrossScopePrivilege` records — verify they were committed in the update set.
 
 ### "Build fails with TypeScript errors in keys.ts"
@@ -663,7 +665,7 @@ if (cur.split(',').indexOf('nowisor') === -1) {
 gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
 ```
 
-Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.12). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.13). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
 
 If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
 
