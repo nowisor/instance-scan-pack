@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v2.0.0 - emits nowisor-scan-bundle schema 2
+// nowisor bundle tool v2.1.0 - emits nowisor-scan-bundle schema 2
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -25,6 +25,15 @@
 // security_admin (username, full name, last login). Scheduled-job run-as
 // accounts. OAuth application names. Knowledge base titles. MID Server
 // hostnames. Table and field metadata, plugin and application inventory.
+// Since pack 1.4.0, the AI agent surface: agent definitions with their role
+// and instruction text (copied as-is, like ACL scripts), tool definitions by
+// name, type and target table (no script text), the tools each agent uses
+// and the inputs it passes them (secret-shaped parameter values replaced by
+// "[redacted]" HERE),
+// teams, use cases and their triggers, MCP servers and the tools they expose,
+// external agent providers, the user names of AI and machine identities and
+// which of them hold admin or security_admin, and a row count of each AI table
+// the Table API does not serve.
 // No ticket, CMDB or end-user records.
 //
 // INTEGRITY
@@ -39,10 +48,11 @@
 // Run it as an admin. Every read is a GlideRecordSecure query (the rows the
 // running user may read) or a GlideAggregate count - except the check reads
 // added in pack 1.3.9 (the exposure, private-scope, typed dictionary and
-// upgrade-history reads) and pack 1.3.10 (the origin fields on the ACL,
+// upgrade-history reads), pack 1.3.10 (the origin fields on the ACL,
 // script-include, job and dictionary reads, the four counted dynamic-code
-// pattern reads, the table-origin read and the knowledge-base reads), which
-// are plain GlideRecord queries: an admin's GlideRecordSecure query drops
+// pattern reads, the table-origin read and the knowledge-base reads) and
+// pack 1.4.0 (the paged AI-surface reads), which are plain GlideRecord
+// queries: an admin's GlideRecordSecure query drops
 // rows, so the read comes back short of its total. The 500-row empty-ACL
 // summary read also carries origin fields since 1.3.10 but stays a
 // GlideRecordSecure query with no total, so the advisor treats it as a floor
@@ -62,8 +72,8 @@
     // to true before you run (R-PACK-1: run OFF first, then ON, and record
     // both timings). OFF: the bundle carries the smaller ACL reads only.
     var READ_EMPTY_ACLS = false
-    var PACK_VERSION = '1.3.13'
-    var TOOL_VERSION = '2.0.0'
+    var PACK_VERSION = '1.4.0'
+    var TOOL_VERSION = '2.1.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     // Schema 2 prints one section per line. A read longer than this goes on
@@ -76,7 +86,11 @@
     var DAY_MS = 24 * 60 * 60 * 1000
 
     // --- The one redaction rule (vsme-app lib/secret-property.js) ---------
-    var SECRET_NAME_SOURCE = '(password|passphrase|secret|token|api[_.]?key|credential)'
+    // pack 1.4.0 (Gate A): + authorization, private_key, bearer, "API key" on
+    // a token boundary
+    var SECRET_NAME_SOURCE = '(password|passphrase|secret|token|api[_.]?key|'
+        + 'credential)|(?:^|[^a-z0-9])(?:authorization|private[\\s_.-]?key|'
+        + 'bearer|api[\\s-]key)(?:[^a-z0-9]|$)'
     var FLAG_OR_NUMBER_SOURCE = '^(true|false|yes|no|-?\\d+)$'
     var REDACTED = '[redacted]'
     var SECRET_NAME = new RegExp(SECRET_NAME_SOURCE, 'i')
@@ -108,7 +122,147 @@
         return v === undefined || v === null ? [] : v
     }
 
+    // WI-AI-2 (pack 1.4.0): the tool parameter columns - an agent's inputs to
+    // a tool. Inside the JSON, a scalar under a secret-shaped key, and the
+    // value of a name/value pair whose name is secret-shaped, are redacted by
+    // the same rule; text that does not parse is redacted whole when it names
+    // a secret. Re-serialised only when something was redacted.
+    var PARAMETER_JSON_COLUMNS = { sn_aia_agent_tool_m2m: ['inputs'] }
+
+    function isScalar(v) {
+        var ty = typeof v
+        return ty === 'string' || ty === 'number' || ty === 'boolean'
+    }
+
+    function isFlagOrNumber(v) {
+        if (!isScalar(v)) {
+            return true
+        }
+        var sv = String(v)
+        return sv === '' || FLAG_OR_NUMBER.test(sv.replace(/^\s+|\s+$/g, ''))
+    }
+
+    function isArray(v) {
+        return Object.prototype.toString.call(v) === '[object Array]'
+    }
+
+    function isPasswordType(t) {
+        if (t === undefined || t === null) {
+            return false
+        }
+        var tt = String(t).toLowerCase()
+        return tt === 'password' || tt === 'password2'
+    }
+
+    // A string that is itself a JSON object or array, parsed; else null
+    function nestedJson(text) {
+        var tx = text.replace(/^\s+|\s+$/g, '')
+        var c0 = tx.charAt(0)
+        if (c0 !== '{' && c0 !== '[') {
+            return null
+        }
+        try {
+            var nv = JSON.parse(tx)
+            return nv !== null && typeof nv === 'object' ? nv : null
+        } catch (e) {
+            return null
+        }
+    }
+
+    // { node, changed }: every string that names a secret is redacted
+    // whole, a string that is itself JSON is redacted inside, and a
+    // secret-shaped key or name/value pair redacts its whole value
+    function redactParameterNode(node) {
+        var r = null
+        if (typeof node === 'string') {
+            var nested = nestedJson(node)
+            if (nested !== null) {
+                r = redactParameterNode(nested)
+                if (r.changed) {
+                    return { node: JSON.stringify(r.node), changed: true }
+                }
+                return { node: node, changed: false }
+            }
+            if (!isFlagOrNumber(node) && SECRET_NAME.test(node)) {
+                return { node: REDACTED, changed: true }
+            }
+            return { node: node, changed: false }
+        }
+        if (isArray(node)) {
+            var arr = []
+            var achanged = false
+            for (var ai = 0; ai < node.length; ai++) {
+                r = redactParameterNode(node[ai])
+                if (r.changed) {
+                    achanged = true
+                }
+                arr.push(r.node)
+            }
+            return { node: achanged ? arr : node, changed: achanged }
+        }
+        if (node === null || typeof node !== 'object') {
+            return { node: node, changed: false }
+        }
+        var out = {}
+        var changed = false
+        var hasValue = node.hasOwnProperty('value')
+        var pair = false
+        if (typeof node.name === 'string' && hasValue) {
+            pair = SECRET_NAME.test(node.name) || isPasswordType(node.type)
+        }
+        for (var k in node) {
+            if (!node.hasOwnProperty(k)) {
+                continue
+            }
+            var v = node[k]
+            var secretSlot = SECRET_NAME.test(k) || (pair && k === 'value')
+            if (secretSlot && !isFlagOrNumber(v)) {
+                out[k] = REDACTED
+                changed = true
+            } else if (secretSlot && v !== null && typeof v === 'object') {
+                out[k] = REDACTED
+                changed = true
+            } else if (k === 'name' && typeof v === 'string' && hasValue) {
+                out[k] = v
+            } else {
+                r = redactParameterNode(v)
+                out[k] = r.node
+                if (r.changed) {
+                    changed = true
+                }
+            }
+        }
+        return { node: changed ? out : node, changed: changed }
+    }
+
+    function redactParameterJson(text) {
+        if (typeof text !== 'string' || text === '') {
+            return text
+        }
+        var parsed = null
+        try {
+            parsed = JSON.parse(text)
+        } catch (e) {
+            return SECRET_NAME.test(text) ? REDACTED : text
+        }
+        var pr = redactParameterNode(parsed)
+        return pr.changed ? JSON.stringify(pr.node) : text
+    }
+
     function redactRows(path, rows) {
+        var cols = PARAMETER_JSON_COLUMNS.hasOwnProperty(path)
+            ? PARAMETER_JSON_COLUMNS[path] : null
+        if (cols) {
+            for (var pi = 0; pi < rows.length; pi++) {
+                for (var pc = 0; pc < cols.length; pc++) {
+                    if (rows[pi].hasOwnProperty(cols[pc])) {
+                        var red = redactParameterJson(rows[pi][cols[pc]])
+                        rows[pi][cols[pc]] = red
+                    }
+                }
+            }
+            return rows
+        }
         if (path !== 'sys_properties') {
             return rows
         }
@@ -855,9 +1009,12 @@
     var CHECK_MAX_PAGES = 50
     var unfiltered = {}
 
+    // pack 1.4.0: a whole-table read (no predicate) orders only, and sends no
+    // unfiltered count - there is no predicate to prove parsed
     function checkPage(path, query, fields, offset) {
+        var ordered = query ? query + '^ORDERBYsys_id' : 'ORDERBYsys_id'
         return table(path, {
-            sysparm_query: query + '^ORDERBYsys_id',
+            sysparm_query: ordered,
             sysparm_fields: fields,
             sysparm_limit: String(CHECK_PAGE),
             sysparm_offset: String(offset)
@@ -865,7 +1022,7 @@
     }
 
     function checkRead(path, query, fields) {
-        if (!unfiltered.hasOwnProperty(path)) {
+        if (query && !unfiltered.hasOwnProperty(path)) {
             unfiltered[path] = true
             table(path, { sysparm_fields: 'sys_id', sysparm_limit: '1' }, true, true)
         }
@@ -1060,6 +1217,130 @@
     }
     if (hasAgent) {
         table('sn_aia_agent', { sysparm_fields: 'sys_id', sysparm_limit: '1' }, true)
+    }
+
+    // --- The AI surface (vsme-app lib/ai-surface/read-set.js), pack 1.4.0 ----
+    // WI-AI-2 Slice 1: the advisor's AI-surface reads, made as it makes them.
+    // First which of the AI tables this instance has, with their web-service
+    // flag, and whether sys_user carries identity_type; then, for each table
+    // the first read returned, its rows (paged, counted, plain GlideRecord) or
+    // its count. A table not returned is never read. The 29 tables the Table
+    // API does not serve are counted here - a connected scan cannot.
+    section('ai_surface')
+    var AI_READS = [
+        ['sn_aia_agent', '', 'sys_id,name,internal_name,agent_type,channel,'
+            + 'record_type,role,instructions,extends,parent,'
+            + 'external_agent_configuration,' + ORIGIN],
+        ['sn_aia_agent_config', '', 'sys_id,agent,active,public,run_as_user,'
+            + 'specialist_enabled'],
+        ['sn_aia_tool', '', 'sys_id,name,type,record_type,active,'
+            + 'target_document_table,' + ORIGIN],
+        ['sn_aia_agent_tool_m2m', '', 'sys_id,agent,tool,active,execution_mode,'
+            + 'max_auto_executions,inputs'],
+        ['sn_aia_team', '', 'sys_id,name,' + ORIGIN],
+        ['sn_aia_team_member', '', 'sys_id,team,agent'],
+        ['sn_aia_usecase', '', 'sys_id,name,internal_name,execution_mode,team,'
+            + 'record_type,' + ORIGIN],
+        ['sn_aia_trigger_configuration', '', 'sys_id,usecase,active,'
+            + 'run_as_user,channel,enable_discovery,usecase_discovery,'
+            + 'target_table'],
+        ['sn_mcp_server_registry', '', 'sys_id,name,label,source,status,'
+            + ORIGIN],
+        ['sn_mcp_tool_definition', '', 'sys_id,name,active,source,category,'
+            + ORIGIN],
+        ['sn_mcp_server_tool_definition_assoc', '', 'sys_id,mcp_server,'
+            + 'tool_definition,enabled,visibility'],
+        ['sn_mcp_server', '', 'sys_id,name,connection_alias'],
+        ['sn_mcp_server_tool', '', 'sys_id,name,mcp_server'],
+        ['sn_aia_external_agent_provider', '', 'sys_id,name,is_secondary,'
+            + 'version'],
+        ['sn_aia_external_agent_configuration', '', 'sys_id,name,'
+            + 'external_agent_provider,synchronous']
+    ]
+    var AI_IDENTITY = 'identity_typeINai_agent,machine'
+    var AI_ID_READS = [
+        ['sys_user', AI_IDENTITY, 'sys_id,user_name,identity_type,active'],
+        ['sys_user_has_role', 'user.' + AI_IDENTITY
+            + '^role.nameINadmin,security_admin^state=active',
+            'sys_id,user,role.name']
+    ]
+    var AI_COUNT_ONLY = ['auth_server_connection_tool_scan_job']
+    AI_COUNT_ONLY.push('auth_server_connection_tool_scan_result')
+    AI_COUNT_ONLY.push('mcp_auth_scopes')
+    AI_COUNT_ONLY.push('np$sys_generative_ai_model_config')
+    var AI_GOV = ['ai_asset_virtual', 'ai_configurations_virtual']
+    AI_GOV.push('asset_metadata_fields', 'asset_metadata_staging')
+    AI_GOV.push('asset_semantic_tag', 'asset_state_lifecycle_mapping')
+    AI_GOV.push('enrichment_field_strategy_m2m')
+    AI_GOV.push('enrichment_recommendation', 'enrichment_strategy')
+    AI_GOV.push('enrichment_target_field', 'enrichment_task')
+    AI_GOV.push('m2m_asset_detail_semantic_tag')
+    AI_GOV.push('reconcile_duplicate_task')
+    AI_GOV.push('reconcile_duplicate_task_detail')
+    AI_GOV.push('st_related_variants')
+    for (var ag = 0; ag < AI_GOV.length; ag++) {
+        AI_COUNT_ONLY.push('sn_ai_governance_' + AI_GOV[ag])
+    }
+    AI_COUNT_ONLY.push('sn_ai_sp_asset_security_task')
+    var AI_AWH = ['client_integration', 'otel_gaic_log', 'policy']
+    AI_AWH.push('policy_attributes', 'policy_mapping', 'policy_type')
+    for (var aw = 0; aw < AI_AWH.length; aw++) {
+        AI_COUNT_ONLY.push('sn_awh_mcp_' + AI_AWH[aw])
+    }
+    AI_COUNT_ONLY.push('sn_awh_st_mcp_tools_view')
+    AI_COUNT_ONLY.push('st_awh_mcp_otel_mcp_servers')
+    AI_COUNT_ONLY.push('st_awh_mcp_otel_mcp_tools')
+    AI_COUNT_ONLY.push('alm_ai_digital_asset', 'auth_server_connection')
+    AI_COUNT_ONLY.push('oauth_entity_scope')
+    AI_COUNT_ONLY.push('sys_agent_access_permission_set_configuration')
+    AI_COUNT_ONLY.push('sys_agent_access_role_configuration')
+    AI_COUNT_ONLY.push('sys_agent_access_role_mapping')
+    var aiAsk = []
+    for (var ar = 0; ar < AI_READS.length; ar++) {
+        if (aiAsk.indexOf(AI_READS[ar][0]) === -1) {
+            aiAsk.push(AI_READS[ar][0])
+        }
+    }
+    for (var ac = 0; ac < AI_COUNT_ONLY.length; ac++) {
+        if (aiAsk.indexOf(AI_COUNT_ONLY[ac]) === -1) {
+            aiAsk.push(AI_COUNT_ONLY[ac])
+        }
+    }
+    aiAsk.sort()
+    var aiPresence = table('sys_db_object', {
+        sysparm_query: 'nameIN' + aiAsk.join(','),
+        sysparm_fields: 'name,ws_access',
+        sysparm_limit: '500'
+    }, true)
+    var aiHave = []
+    if (!aiPresence.error) {
+        for (var ap = 0; ap < aiPresence.result.length; ap++) {
+            aiHave.push(String(aiPresence.result[ap].name))
+        }
+    }
+    var aiColumn = table('sys_dictionary', {
+        sysparm_query: 'name=sys_user^element=identity_type',
+        sysparm_fields: 'name,element',
+        sysparm_limit: '1'
+    }, true)
+    for (var rr = 0; rr < AI_READS.length; rr++) {
+        if (aiHave.indexOf(AI_READS[rr][0]) !== -1) {
+            checkRead(AI_READS[rr][0], AI_READS[rr][1], AI_READS[rr][2])
+        }
+    }
+    if (!aiColumn.error && aiColumn.result.length > 0) {
+        for (var ir2 = 0; ir2 < AI_ID_READS.length; ir2++) {
+            checkRead(AI_ID_READS[ir2][0], AI_ID_READS[ir2][1],
+                AI_ID_READS[ir2][2])
+        }
+    }
+    for (var co = 0; co < AI_COUNT_ONLY.length; co++) {
+        if (aiHave.indexOf(AI_COUNT_ONLY[co]) !== -1) {
+            table(AI_COUNT_ONLY[co], {
+                sysparm_fields: 'sys_id',
+                sysparm_limit: '1'
+            }, true)
+        }
     }
 
     // --- The document (schema 2) ---------------------------------------------

@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor ai-discovery-export tool v1.0.0 - emits ai-discovery schema v1
+// nowisor ai-discovery-export tool v1.0.1 - emits ai-discovery schema v1
 // Paste-into-Background-Script sensor for the ai-agent-security category.
 //
 // Sensor #3 (after security-log-export and incident-june-2026-check). It maps
@@ -31,7 +31,7 @@
 //   sys_db_object      - name, label, sys_class_name, super_class.name
 //   sys_dictionary     - name, element, internal_type, column_label
 //   v_plugin           - id  (ONLY id is verified; do not read name/active)
-//   sn_aia_use_case    - active, execution_mode
+//   sn_aia_usecase     - execution_mode (active only where the dictionary has it)
 //   sys_cb_ai_agent    - existence only (zero fields verified)
 //   sys_properties     - name, value
 //
@@ -40,7 +40,7 @@
 
 (function aiDiscoveryExport() {
     var SCHEMA_VERSION = 'v1'
-    var PACK_VERSION = '1.3.13'
+    var PACK_VERSION = '1.4.0'
     var TABLE_CAP = 400
     var ROW_CAP = 200
     var SAMPLE_CAP = 50
@@ -349,37 +349,65 @@
     // Known-verified agentic tables get an explicit presence probe so the
     // envelope always carries their state even if a prefix scan is capped.
     var knownAgentic = {}
-    knownAgentic.sn_aia_use_case = tableExists('sn_aia_use_case')
+    knownAgentic.sn_aia_usecase = tableExists('sn_aia_usecase')
     knownAgentic.sys_cb_ai_agent = tableExists('sys_cb_ai_agent')
 
-    // Active/autonomous use-case counts use ONLY verified fields.
+    // Use-case counts use ONLY verified fields. pack 1.4.0 (R-AI-1): the
+    // table is sn_aia_usecase, which has execution_mode and, on the
+    // instance Gate 0 read, no `active` column - so `active` filters only
+    // where the dictionary has it; otherwise the active counts stay -1 (not
+    // measured) and the unfiltered counts say what was counted.
     var useCaseSummary = {}
-    useCaseSummary.available = knownAgentic.sn_aia_use_case
+    useCaseSummary.available = knownAgentic.sn_aia_usecase
     useCaseSummary.active_count = -1
     useCaseSummary.autonomous_active_count = -1
-    if (knownAgentic.sn_aia_use_case) {
+    useCaseSummary.active_column = false
+    useCaseSummary.count = -1
+    useCaseSummary.autonomous_count = -1
+    if (knownAgentic.sn_aia_usecase) {
+        var ucHasActive = false
         try {
-            var ucA = new GlideRecord('sn_aia_use_case')
-            ucA.addQuery('active', true)
+            ucHasActive = new GlideRecord('sn_aia_usecase').isValidField('active')
+        } catch (eV) {
+            ucHasActive = false
+        }
+        useCaseSummary.active_column = ucHasActive ? true : false
+        try {
+            var ucA = new GlideRecord('sn_aia_usecase')
+            if (ucHasActive) {
+                ucA.addQuery('active', true)
+            }
             ucA.setLimit(ROW_CAP)
             ucA.query()
             var acount = 0
             while (ucA.next()) acount++
-            useCaseSummary.active_count = acount
+            if (ucHasActive) {
+                useCaseSummary.active_count = acount
+            } else {
+                useCaseSummary.count = acount
+            }
         } catch (e) {
-            coverageNotes.push('sn_aia_use_case active count failed')
+            coverageNotes.push('sn_aia_usecase count failed')
         }
         try {
-            var ucB = new GlideRecord('sn_aia_use_case')
-            ucB.addQuery('active', true)
-            ucB.addQuery('execution_mode', 'autonomous')
+            var ucB = new GlideRecord('sn_aia_usecase')
+            if (ucHasActive) {
+                ucB.addQuery('active', true)
+            }
+            // the stored value of "Autonomous" is autopilot (sys_choice,
+            // Gate 0); 'autonomous' is a label, matching no row
+            ucB.addQuery('execution_mode', 'autopilot')
             ucB.setLimit(ROW_CAP)
             ucB.query()
             var bcount = 0
             while (ucB.next()) bcount++
-            useCaseSummary.autonomous_active_count = bcount
+            if (ucHasActive) {
+                useCaseSummary.autonomous_active_count = bcount
+            } else {
+                useCaseSummary.autonomous_count = bcount
+            }
         } catch (e2) {
-            coverageNotes.push('sn_aia_use_case autonomous count failed')
+            coverageNotes.push('sn_aia_usecase autonomous count failed')
         }
     }
 
@@ -467,7 +495,7 @@
     var anyAgenticSurface = false
     if (pluginsPresent.length > 0) anyAgenticSurface = true
     if (namespaceTables.length > 0) anyAgenticSurface = true
-    if (knownAgentic.sn_aia_use_case) anyAgenticSurface = true
+    if (knownAgentic.sn_aia_usecase) anyAgenticSurface = true
     if (knownAgentic.sys_cb_ai_agent) anyAgenticSurface = true
 
     var noteParts = []

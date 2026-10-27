@@ -33,7 +33,7 @@
 // Schema: v1. ES5-only. ASCII-only, short lines.
 ;(function aiPromptInjectionExposure(finding) {
     var CHECK_ID = 'nowisor-ai-prompt-injection-exposure'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
 
     // Candidate binding / variable-map tables UNDER TEST, not claims.
@@ -44,7 +44,7 @@
     BINDING_TABLES.push('sys_hub_flow_input')
     BINDING_TABLES.push('sys_hub_action_input')
 
-    var AGENT_TABLES = ['sn_aia_use_case', 'sys_cb_ai_agent']
+    var AGENT_TABLES = ['sn_aia_usecase', 'sys_cb_ai_agent']
     AGENT_TABLES.push('sys_cs_topic')
 
     // The user-editable free-text fields named in the spec.

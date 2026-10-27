@@ -27,10 +27,10 @@
 // Schema: v1. ES5-only. ASCII-only, short lines.
 ;(function aiSubprodUnmaskedPosture(finding) {
     var CHECK_ID = 'nowisor-ai-subprod-unmasked-posture'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
 
-    var AGENTIC = ['sn_aia_use_case', 'sys_cb_ai_agent']
+    var AGENTIC = ['sn_aia_usecase', 'sys_cb_ai_agent']
     AGENTIC.push('sn_gen_ai_capability')
     AGENTIC.push('sys_cs_topic')
 

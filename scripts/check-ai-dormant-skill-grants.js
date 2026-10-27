@@ -26,10 +26,10 @@
 // Schema: v1. ES5-only. ASCII-only, short lines.
 ;(function aiDormantSkillGrants(finding) {
     var CHECK_ID = 'nowisor-ai-dormant-skill-grants'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
 
-    var SOURCES = ['sn_aia_use_case', 'sys_cb_ai_agent', 'sys_cs_topic']
+    var SOURCES = ['sn_aia_usecase', 'sys_cb_ai_agent', 'sys_cs_topic']
 
     var RUNAS_HINTS = ['run_as', 'run_as_user', 'execute_as']
     RUNAS_HINTS.push('user')

@@ -25,11 +25,11 @@
 // ES5-only (Instance Scan runtime constraint). ASCII-only, short lines.
 ;(function aiAgentUnowned(finding) {
     var CHECK_ID = 'nowisor-ai-agent-unowned'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
 
     // Candidate tables UNDER TEST, not verified identifiers.
-    var SOURCES = ['sn_aia_use_case', 'sys_cb_ai_agent', 'sys_cs_topic']
+    var SOURCES = ['sn_aia_usecase', 'sys_cb_ai_agent', 'sys_cs_topic']
 
     var OWNER_HINTS = ['owner', 'owned_by', 'assigned_to']
     OWNER_HINTS.push('managed_by')

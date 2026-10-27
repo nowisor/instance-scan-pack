@@ -26,7 +26,7 @@
 // Schema: v1. ES5-only. ASCII-only, short lines.
 ;(function aiControlTowerCoverageGap(finding) {
     var CHECK_ID = 'nowisor-ai-control-tower-coverage-gap'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
 
     var REGISTRY = ['sn_ai_control_tower_asset']
@@ -34,7 +34,7 @@
     REGISTRY.push('sn_ai_registry')
 
     // Agentic entity sources UNDER TEST, not verified identifiers.
-    var SOURCES = ['sn_aia_use_case', 'sys_cb_ai_agent', 'sys_cs_topic']
+    var SOURCES = ['sn_aia_usecase', 'sys_cb_ai_agent', 'sys_cs_topic']
     SOURCES.push('sn_gen_ai_capability')
 
     var NAME_HINTS = ['name', 'label', 'title']

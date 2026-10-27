@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor ai-usage-export tool v1.0.0 - emits ai-usage schema v1
+// nowisor ai-usage-export tool v1.0.1 - emits ai-usage schema v1
 // Paste-into-Background-Script companion to the ai-agent-security check group.
 //
 // Sensor #5. Emits, per agentic entity, the PERMISSION ENVELOPE (what the
@@ -40,7 +40,7 @@
 
 (function aiUsageExport() {
     var SCHEMA_VERSION = 'v1'
-    var PACK_VERSION = '1.3.13'
+    var PACK_VERSION = '1.4.0'
     var LOOKBACK_DAYS = 90
     var ROW_CAP = 200
     var MAX_QUERIES = 400
@@ -59,7 +59,7 @@
     var notes = []
 
     // Agentic entity sources UNDER TEST, not verified identifiers.
-    var AGENT_TABLES = ['sn_aia_use_case', 'sys_cb_ai_agent']
+    var AGENT_TABLES = ['sn_aia_usecase', 'sys_cb_ai_agent']
     AGENT_TABLES.push('sys_cs_topic')
     AGENT_TABLES.push('sys_mcp_server')
 

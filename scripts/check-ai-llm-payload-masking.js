@@ -26,10 +26,10 @@
 // Schema: v1. ES5-only. ASCII-only, short lines.
 ;(function aiLlmPayloadMasking(finding) {
     var CHECK_ID = 'nowisor-ai-llm-payload-masking'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
 
-    var AGENT_TABLES = ['sn_aia_use_case', 'sys_cb_ai_agent']
+    var AGENT_TABLES = ['sn_aia_usecase', 'sys_cb_ai_agent']
     AGENT_TABLES.push('sys_cs_topic')
 
     // Platform data-protection mechanisms, any one of which counts.
@@ -86,6 +86,9 @@
         try {
             var have = fieldsOf(t)
             var gr = new GlideRecord(t)
+            // 1.0.1: a table with no active column has no count of ACTIVE rows
+            // (sn_aia_usecase on Australia P6): not countable, never all rows
+            if (activeOnly && have && !have['active']) return -1
             if (activeOnly && have && have['active']) gr.addQuery('active', true)
             gr.setLimit(ROW_CAP)
             gr.query()

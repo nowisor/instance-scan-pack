@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.3.13
+- **Pack version:** 1.4.0
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -133,7 +133,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.3.13) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.4.0) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -201,10 +201,14 @@ Nothing connects to your instance from outside. No credentials leave your organi
    in-instance before the file is written), ACL script and condition text, the list of users holding
    admin and security_admin roles (username, full name, last login), scheduled-job run-as accounts,
    OAuth application names, knowledge base titles and MID Server hostnames, script include and
-   credential record names (no bodies, no secrets), plugin and application inventory, and table and
-   field metadata. It does not contain platform passwords, tickets, CMDB records or end-user records.
-   Script text is copied as-is: anything a developer wrote into an ACL script — including a hardcoded
-   secret — will be in the file, so review it. Bundle processing is covered by the Nowisor DPA; the
+   credential record names (no bodies, no secrets), plugin and application inventory, table and
+   field metadata, and the AI agent surface: agent definitions with their role and instruction text,
+   tool definitions by name, type and target table (no script text), the inputs each agent passes its
+   tools (secret-shaped values redacted in-instance), teams, use cases, MCP and agent-provider
+   registrations, and the user names of AI and machine identities. It does not contain platform
+   passwords, tickets, CMDB records or end-user records. ACL script and agent instruction text is copied
+   as-is: anything a developer wrote into an ACL script or an agent's instructions — including a
+   hardcoded secret — will be in the file, so review it. Bundle processing is covered by the Nowisor DPA; the
    bundle is processed and stored in the EU and deleted 30 days after upload.
    </details>
 5. Upload it below. Pick the instance or create it from the bundle's URL.
@@ -240,7 +244,7 @@ queries for the check reads added in 1.3.9 and 1.3.10, `GlideRecordSecure` queri
 
 ### What the script reads
 
-Every read `tools/bundle.js` records — 79 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) and in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
+Every read `tools/bundle.js` records — 135 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) and in pack 1.4.0 (the AI-surface reads, paged with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
 
 | Part | Table | Query | Fields | Rows per request | When |
 |---|---|---|---|---|---|
@@ -312,6 +316,62 @@ Every read `tools/bundle.js` records — 79 distinct reads — listed from the a
 | AI surface | `sys_scope` | `nameLIKENow Assist^ORnameLIKEGenerative AI^ORnameLIKEAI Agent^ORnameLIKEControl Tower^ORnameLIKEBuild Agent` | `name,active` | 50 | every run |
 | AI surface | `sys_plugins` | `nameLIKENow Assist^ORnameLIKEGenerative AI^ORnameLIKEAI Agent^ORnameLIKEControl Tower^ORnameLIKEBuild Agent` | `name,active` | 50 | every run |
 | AI surface | `sys_properties` | `nameLIKEnowassist^ORnameLIKEgenerative_ai^ORnameLIKEsn_aia` | `name` | 1 | every run |
+| AI surface | `sn_aia_agent` | — | `sys_id` | 1 | sys_db_object lists sn_aia_agent |
+| AI surface | `sys_db_object` | `nameINalm_ai_digital_asset,auth_server_connection,auth_server_connection_tool_scan_job,auth_server_connection_tool_scan_result,mcp_auth_scopes,np$sys_generative_ai_model_config,oauth_entity_scope,sn_ai_governance_ai_asset_virtual,sn_ai_governance_ai_configurations_virtual,sn_ai_governance_asset_metadata_fields,sn_ai_governance_asset_metadata_staging,sn_ai_governance_asset_semantic_tag,sn_ai_governance_asset_state_lifecycle_mapping,sn_ai_governance_enrichment_field_strategy_m2m,sn_ai_governance_enrichment_recommendation,sn_ai_governance_enrichment_strategy,sn_ai_governance_enrichment_target_field,sn_ai_governance_enrichment_task,sn_ai_governance_m2m_asset_detail_semantic_tag,sn_ai_governance_reconcile_duplicate_task,sn_ai_governance_reconcile_duplicate_task_detail,sn_ai_governance_st_related_variants,sn_ai_sp_asset_security_task,sn_aia_agent,sn_aia_agent_config,sn_aia_agent_tool_m2m,sn_aia_external_agent_configuration,sn_aia_external_agent_provider,sn_aia_team,sn_aia_team_member,sn_aia_tool,sn_aia_trigger_configuration,sn_aia_usecase,sn_awh_mcp_client_integration,sn_awh_mcp_otel_gaic_log,sn_awh_mcp_policy,sn_awh_mcp_policy_attributes,sn_awh_mcp_policy_mapping,sn_awh_mcp_policy_type,sn_awh_st_mcp_tools_view,sn_mcp_server,sn_mcp_server_registry,sn_mcp_server_tool,sn_mcp_server_tool_definition_assoc,sn_mcp_tool_definition,st_awh_mcp_otel_mcp_servers,st_awh_mcp_otel_mcp_tools,sys_agent_access_permission_set_configuration,sys_agent_access_role_configuration,sys_agent_access_role_mapping` | `name,ws_access` | 500 | every run |
+| AI surface | `sys_dictionary` | `name=sys_user^element=identity_type` | `name,element` | 1 | every run |
+| AI surface | `sn_aia_agent` | `ORDERBYsys_id` | `sys_id,name,internal_name,agent_type,channel,record_type,role,instructions,extends,parent,external_agent_configuration,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | the AI-surface presence read lists sn_aia_agent |
+| AI surface | `sn_aia_agent_config` | `ORDERBYsys_id` | `sys_id,agent,active,public,run_as_user,specialist_enabled` | 1000, paged | the AI-surface presence read lists sn_aia_agent_config |
+| AI surface | `sn_aia_tool` | `ORDERBYsys_id` | `sys_id,name,type,record_type,active,target_document_table,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | the AI-surface presence read lists sn_aia_tool |
+| AI surface | `sn_aia_agent_tool_m2m` | `ORDERBYsys_id` | `sys_id,agent,tool,active,execution_mode,max_auto_executions,inputs` | 1000, paged | the AI-surface presence read lists sn_aia_agent_tool_m2m |
+| AI surface | `sn_aia_team` | `ORDERBYsys_id` | `sys_id,name,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | the AI-surface presence read lists sn_aia_team |
+| AI surface | `sn_aia_team_member` | `ORDERBYsys_id` | `sys_id,team,agent` | 1000, paged | the AI-surface presence read lists sn_aia_team_member |
+| AI surface | `sn_aia_usecase` | `ORDERBYsys_id` | `sys_id,name,internal_name,execution_mode,team,record_type,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | the AI-surface presence read lists sn_aia_usecase |
+| AI surface | `sn_aia_trigger_configuration` | `ORDERBYsys_id` | `sys_id,usecase,active,run_as_user,channel,enable_discovery,usecase_discovery,target_table` | 1000, paged | the AI-surface presence read lists sn_aia_trigger_configuration |
+| AI surface | `sn_mcp_server_registry` | `ORDERBYsys_id` | `sys_id,name,label,source,status,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | the AI-surface presence read lists sn_mcp_server_registry |
+| AI surface | `sn_mcp_tool_definition` | `ORDERBYsys_id` | `sys_id,name,active,source,category,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | the AI-surface presence read lists sn_mcp_tool_definition |
+| AI surface | `sn_mcp_server_tool_definition_assoc` | `ORDERBYsys_id` | `sys_id,mcp_server,tool_definition,enabled,visibility` | 1000, paged | the AI-surface presence read lists sn_mcp_server_tool_definition_assoc |
+| AI surface | `sn_mcp_server` | `ORDERBYsys_id` | `sys_id,name,connection_alias` | 1000, paged | the AI-surface presence read lists sn_mcp_server |
+| AI surface | `sn_mcp_server_tool` | `ORDERBYsys_id` | `sys_id,name,mcp_server` | 1000, paged | the AI-surface presence read lists sn_mcp_server_tool |
+| AI surface | `sn_aia_external_agent_provider` | `ORDERBYsys_id` | `sys_id,name,is_secondary,version` | 1000, paged | the AI-surface presence read lists sn_aia_external_agent_provider |
+| AI surface | `sn_aia_external_agent_configuration` | `ORDERBYsys_id` | `sys_id,name,external_agent_provider,synchronous` | 1000, paged | the AI-surface presence read lists sn_aia_external_agent_configuration |
+| AI surface | `sys_user` | `identity_typeINai_agent,machine^ORDERBYsys_id` | `sys_id,user_name,identity_type,active` | 1000, paged | the dictionary lists sys_user.identity_type |
+| AI surface | `sys_user_has_role` | `user.identity_typeINai_agent,machine^role.nameINadmin,security_admin^state=active^ORDERBYsys_id` | `sys_id,user,role.name` | 1000, paged | the dictionary lists sys_user.identity_type |
+| AI surface | `sys_user_has_role` | — | `sys_id` | 1 | the dictionary lists sys_user.identity_type |
+| AI surface | `auth_server_connection_tool_scan_job` | — | `sys_id` | 1 | the AI-surface presence read lists auth_server_connection_tool_scan_job |
+| AI surface | `auth_server_connection_tool_scan_result` | — | `sys_id` | 1 | the AI-surface presence read lists auth_server_connection_tool_scan_result |
+| AI surface | `mcp_auth_scopes` | — | `sys_id` | 1 | the AI-surface presence read lists mcp_auth_scopes |
+| AI surface | `np$sys_generative_ai_model_config` | — | `sys_id` | 1 | the AI-surface presence read lists np$sys_generative_ai_model_config |
+| AI surface | `sn_ai_governance_ai_asset_virtual` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_ai_asset_virtual |
+| AI surface | `sn_ai_governance_ai_configurations_virtual` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_ai_configurations_virtual |
+| AI surface | `sn_ai_governance_asset_metadata_fields` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_asset_metadata_fields |
+| AI surface | `sn_ai_governance_asset_metadata_staging` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_asset_metadata_staging |
+| AI surface | `sn_ai_governance_asset_semantic_tag` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_asset_semantic_tag |
+| AI surface | `sn_ai_governance_asset_state_lifecycle_mapping` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_asset_state_lifecycle_mapping |
+| AI surface | `sn_ai_governance_enrichment_field_strategy_m2m` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_enrichment_field_strategy_m2m |
+| AI surface | `sn_ai_governance_enrichment_recommendation` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_enrichment_recommendation |
+| AI surface | `sn_ai_governance_enrichment_strategy` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_enrichment_strategy |
+| AI surface | `sn_ai_governance_enrichment_target_field` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_enrichment_target_field |
+| AI surface | `sn_ai_governance_enrichment_task` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_enrichment_task |
+| AI surface | `sn_ai_governance_m2m_asset_detail_semantic_tag` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_m2m_asset_detail_semantic_tag |
+| AI surface | `sn_ai_governance_reconcile_duplicate_task` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_reconcile_duplicate_task |
+| AI surface | `sn_ai_governance_reconcile_duplicate_task_detail` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_reconcile_duplicate_task_detail |
+| AI surface | `sn_ai_governance_st_related_variants` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_governance_st_related_variants |
+| AI surface | `sn_ai_sp_asset_security_task` | — | `sys_id` | 1 | the AI-surface presence read lists sn_ai_sp_asset_security_task |
+| AI surface | `sn_awh_mcp_client_integration` | — | `sys_id` | 1 | the AI-surface presence read lists sn_awh_mcp_client_integration |
+| AI surface | `sn_awh_mcp_otel_gaic_log` | — | `sys_id` | 1 | the AI-surface presence read lists sn_awh_mcp_otel_gaic_log |
+| AI surface | `sn_awh_mcp_policy` | — | `sys_id` | 1 | the AI-surface presence read lists sn_awh_mcp_policy |
+| AI surface | `sn_awh_mcp_policy_attributes` | — | `sys_id` | 1 | the AI-surface presence read lists sn_awh_mcp_policy_attributes |
+| AI surface | `sn_awh_mcp_policy_mapping` | — | `sys_id` | 1 | the AI-surface presence read lists sn_awh_mcp_policy_mapping |
+| AI surface | `sn_awh_mcp_policy_type` | — | `sys_id` | 1 | the AI-surface presence read lists sn_awh_mcp_policy_type |
+| AI surface | `sn_awh_st_mcp_tools_view` | — | `sys_id` | 1 | the AI-surface presence read lists sn_awh_st_mcp_tools_view |
+| AI surface | `st_awh_mcp_otel_mcp_servers` | — | `sys_id` | 1 | the AI-surface presence read lists st_awh_mcp_otel_mcp_servers |
+| AI surface | `st_awh_mcp_otel_mcp_tools` | — | `sys_id` | 1 | the AI-surface presence read lists st_awh_mcp_otel_mcp_tools |
+| AI surface | `alm_ai_digital_asset` | — | `sys_id` | 1 | the AI-surface presence read lists alm_ai_digital_asset |
+| AI surface | `auth_server_connection` | — | `sys_id` | 1 | the AI-surface presence read lists auth_server_connection |
+| AI surface | `oauth_entity_scope` | — | `sys_id` | 1 | the AI-surface presence read lists oauth_entity_scope |
+| AI surface | `sys_agent_access_permission_set_configuration` | — | `sys_id` | 1 | the AI-surface presence read lists sys_agent_access_permission_set_configuration |
+| AI surface | `sys_agent_access_role_configuration` | — | `sys_id` | 1 | the AI-surface presence read lists sys_agent_access_role_configuration |
+| AI surface | `sys_agent_access_role_mapping` | — | `sys_id` | 1 | the AI-surface presence read lists sys_agent_access_role_mapping |
 | release reading | `sys_properties` | `name=glide.buildtag.last^ORname=glide.buildtag^ORname=instance_id^ORname=instance_name` | `name,value` | 10 | every run |
 | release reading | `/stats.do` (page) | — | — | — | never requested in an instance — recorded as unanswered when build tag or instance id missing after the sys_properties read |
 | release reading | `sys_db_object` | `nameIN<SECURITY_CORE_TABLES + control YAML tables, chunks of 80>` | `name,label,super_class,sys_scope` | 500 | every run |
@@ -322,7 +382,7 @@ Every read `tools/bundle.js` records — 79 distinct reads — listed from the a
 | release reading | `sys_scope` (row count) | — | — | — | every run |
 | release reading | `sys_plugins` | — | `sys_id,name,source,active,description,version` | 2000 | every run |
 | release reading | `sys_scope` | — | `name,version,active,scope,sys_id,private,vendor` | 2000, paged | every run |
-| access diagnosis | `sys_user` | — | `sys_id` | 1 | sys_properties and sys_security_acl both refused (403) |
+| access diagnosis | `sys_user` | — | `sys_id` | 1 | sys_properties and sys_security_acl both refused (403); or (WI-AI-2) readCheck's unfiltered count for the AI identity read, when the dictionary lists sys_user.identity_type |
 
 <!-- END bundle-read-plan -->
 
@@ -479,6 +539,8 @@ Pack versions follow semver:
 
 ### Changelog
 
+**1.4.0 (unreleased — WI-AI-2 Slice 1)** — offline bundle (`tools/bundle.js` 2.1.0, bundle schema 2 unchanged): the bundle makes the advisor's new AI-surface reads. First, which AI tables the instance has, with each table's web-service flag, and whether `sys_user` carries `identity_type`; then, for each table it has, AI agents (with their role and instruction text), agent configuration, tools (name, type and target table — no script text; Slice 3 reads it), the tool each agent uses and the inputs it passes it, teams and their members, use cases and their triggers, provisioned MCP servers, MCP tool definitions and the server-tool links, external MCP servers and their tools, external agent providers and configurations — each read whole, paged by `sys_id` with its row count, as a plain GlideRecord query — and the AI and machine identities (`identity_type` `ai_agent` or `machine`) with their admin and security_admin grants. 35 further AI tables are read for a row count only: the 29 the Table API does not serve on an instance that has them (web-service access off — a connection is refused them, the bundle counts them) and six Gate 0 did not look at. Secret-shaped values inside the agent-tool inputs are replaced by `[redacted]` in-instance, by the same rule as property values — a rule this release widens for property values too: `authorization`, `private_key`, `bearer` and "API key" now count as secret-shaped names, each on a token boundary. A table the instance does not have is never read. The whole-table reads send no unfiltered count (there is no predicate to prove parsed). Every AI check that named the table `sn_aia_use_case`, which no instance has, now reads `sn_aia_usecase` (R-AI-1): thirteen checks at 1.0.1, and the three AI export tools at 1.0.1 — the discovery export filters use cases on `active` only where the instance has that column, and counts autonomous use cases by the stored value `autopilot`; a check asking for active rows of a table with no `active` column gets no count rather than every row; and the kill-switch check reports a class whose table carries neither an `active` flag nor a run-as field as not assessable, never as lacking a lever. Check count unchanged (49).
+
 **1.3.13 (2026-10-24)** — dependency updates, no rule or engine changes. Build toolchain `@servicenow/sdk` 4.13.3 → 4.14.0, which carries patched `handlebars` (4.7.10), `fastify` (5.12.7), `@fastify/static` (10.1.3) and `joi` (17.13.8); the lockfile refresh also brings `source-map-js` 1.2.2. The `js-yaml@3` and `joi@17` pins are removed — the toolchain no longer carries a 3.x `js-yaml` and pins the patched `joi` itself. `undici@7` stays pinned, now to 7.30.1: the CLI pins 7.29.1, and three advisories published 2026-10-23, among them a denial of service, are fixed in 7.30.1, and `zod@4` is pinned to 4.6.6 (memory exhaustion validating oversized collections, fixed in 4.6.6; the toolchain pins 4.6.5). All dev-only: none of them is part of the installed app. `npm audit`: 0 vulnerabilities. Built with 4.14.0, the installed app differs from 1.3.12 in the version it carries and in two build records only: the SBOM names the 4.14.0 toolchain (and no longer carries a serial number or timestamp), and the packaged `package.json` carries the new toolchain and pins. No change to any check, script, manifest entry or bundle format. Check count unchanged (49).
 
 **1.3.12 (2026-10-19)** — offline bundle (`tools/bundle.js` 2.0.0, **bundle schema 2**): a customer instance's bundle stopped in Rhino ("String object would exceed maximum permitted size of 33554432") — schema 1 built the whole document as one string. Schema 2 prints one section per line, so no string holds the bundle. It is smaller: rows are printed column by column, a reference as its value, a record's package once per read; the two reads nothing used (the 5,000-row active REST operation read and the untyped 1,000-row secret-name dictionary read) are no longer made, and `sys_plugins.description` and the empty-ACL summary's `type` are asked for and not read. `sys_db_object` is read only for the tables the typed secret-name rows name, not every table (the advisor answers its own table-origin read with those rows; nothing reads another). Replayed over dev433526's run 6 (pack 1.3.10, 2026-10-18), the printed bundle is 3.3 M characters in 135 lines instead of 11.3 M in one document, with the same findings. The script starts no read after 240 s: a read not reached is recorded as not read, and its checks are UNKNOWN, never passed; the output prints the time per section, and whether and where the cap was reached, before the bundle. **Both plugin reads — the plugin list and DATA-003's encryption plugins — are made on `sys_plugins`; `v_plugin` is never read** — a view the platform rebuilds on a cold read (207 s on dev433526, which used the whole time budget), so the advisor answers its plugin reads from `sys_plugins` on an upload (and an upload's fingerprint is compared only with other uploads'). The advisor reads schema 1 and schema 2, from engine 1.53.0. Sizing probe 1.1.0: `sys_plugins` is counted in place of `v_plugin`. No change to any check or manifest check entry. Check count unchanged (49).
@@ -617,7 +679,7 @@ read anything from the advisor account.
 ### "No findings produced after scan"
 
 - **Suite not bootstrapped.** Run `bootstrap/install-suite.js`. Without it, the platform's full-scan engine never executes the checks.
-- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.3.13; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
+- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.4.0; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
 - **Cross-scope read denied.** If scan_check_execution records show "permission denied" on Global tables, your instance enforces strict scope isolation. The pack ships 17 `CrossScopePrivilege` records — verify they were committed in the update set.
 
 ### "Build fails with TypeScript errors in keys.ts"
@@ -665,7 +727,7 @@ if (cur.split(',').indexOf('nowisor') === -1) {
 gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
 ```
 
-Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.3.13). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.4.0). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
 
 If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
 

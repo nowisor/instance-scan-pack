@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor ai-bom-export tool v1.0.0 - emits ai-bom schema v1
+// nowisor ai-bom-export tool v1.0.1 - emits ai-bom schema v1
 // Paste-into-Background-Script sensor for the ai-agent-security category.
 //
 // Sensor #4. Emits one record per agentic entity: Now Assist / AI Agent use
@@ -29,14 +29,14 @@
 // Verified identifiers used directly (verified_schema, Zurich Patch 6):
 //   sys_db_object   - name, label
 //   sys_dictionary  - name, element, internal_type
-//   sn_aia_use_case - active, execution_mode
+//   sn_aia_usecase - execution_mode (R-AI-1, pack 1.4.0; no `active` on Australia P6)
 //   sys_cb_ai_agent - existence only (zero fields verified)
 //
 // ES5-only (Rhino ES0). ASCII-only, short lines, one statement per line.
 
 (function aiBomExport() {
     var SCHEMA_VERSION = 'v1'
-    var PACK_VERSION = '1.3.13'
+    var PACK_VERSION = '1.4.0'
     var ENTITY_CAP = 200
     var FIELD_CAP = 200
 
@@ -71,7 +71,7 @@
 
     // Entity-type sources. Candidate table names UNDER TEST, not claims.
     var ENTITY_SOURCES = [
-        { table: 'sn_aia_use_case', kind: 'ai_agent_use_case' },
+        { table: 'sn_aia_usecase', kind: 'ai_agent_use_case' },
         { table: 'sys_cb_ai_agent', kind: 'ai_agent' },
         { table: 'sys_cb_topic', kind: 'va_topic' },
         { table: 'sys_cs_topic', kind: 'va_topic' },
@@ -241,7 +241,7 @@
                 ent.created_by = attr(gr, 'sys_created_by')
                 ent.created_on = attr(gr, 'sys_created_on')
                 ent.updated_on = attr(gr, 'sys_updated_on')
-                // Only sn_aia_use_case has execution_mode as a verified field.
+                // Only sn_aia_usecase has execution_mode as a verified field.
                 var emField = null
                 if (hasOwn(fields, 'execution_mode')) {
                     emField = 'execution_mode'

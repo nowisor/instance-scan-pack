@@ -24,11 +24,11 @@
 // Schema: v1. ES5-only. ASCII-only, short lines.
 ;(function aiAgentAuditRetention(finding) {
     var CHECK_ID = 'nowisor-ai-agent-audit-retention'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
     var RETENTION_FLOOR_DAYS = 90
 
-    var AGENT_TABLES = ['sn_aia_use_case', 'sys_cb_ai_agent']
+    var AGENT_TABLES = ['sn_aia_usecase', 'sys_cb_ai_agent']
     AGENT_TABLES.push('sys_cs_topic')
 
     // Execution-log candidates for agent activity.

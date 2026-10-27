@@ -30,14 +30,14 @@
 // Schema: v1. ES5-only. ASCII-only, short lines.
 ;(function aiKillSwitchAbsent(finding) {
     var CHECK_ID = 'nowisor-ai-kill-switch-absent'
-    var CHECK_VERSION = '1.0.0'
+    var CHECK_VERSION = '1.0.1'
     var ROW_CAP = 200
 
     // One entry per agent class we assess independently.
     var CLASSES = [
         {
             label: 'AI Agent use cases',
-            table: 'sn_aia_use_case',
+            table: 'sn_aia_usecase',
             plugins: ['com.glide.now_assist', 'com.snc.now_assist'],
             props: ['sn_aia.enabled', 'glide.aia.enabled']
         },
@@ -167,6 +167,9 @@
     // ---- assess each present class ---------------------------------------
     var assessed = []
     var lacking = []
+    // 1.0.1: tables whose structure carries neither entity lever (no active
+    // column, no run-as field) - unresolved, never "lacking a lever"
+    var unresolved = []
 
     for (var c = 0; c < CLASSES.length; c++) {
         var cls = CLASSES[c]
@@ -204,6 +207,11 @@
             levers.push('revocable_runas_role')
         }
 
+        if (levers.length === 0 && have && !have['active'] && !runF) {
+            unresolved.push(cls.table)
+            continue
+        }
+
         var row = {}
         row.agent_class = cls.label
         row.table = cls.table
@@ -214,9 +222,18 @@
     }
 
     if (assessed.length === 0) {
+        var naReason = unresolved.length
+            ? 'lever_fields_unresolved'
+            : 'no_agent_classes_present'
         emit(
-            'No agent classes are present on this instance, so deactivation ' +
-            'paths cannot be assessed. Out of scope, NOT a pass.',
+            (unresolved.length
+                ? 'Agent classes are present (' + unresolved.join(', ') +
+                  '), but their tables carry neither an active flag nor a ' +
+                  'run-as field on this release, so deactivation paths ' +
+                  'cannot be assessed from the table. Out of scope, NOT a pass.'
+                : 'No agent classes are present on this instance, so ' +
+                  'deactivation paths cannot be assessed. Out of scope, NOT ' +
+                  'a pass.'),
             {
                 nowisor_check_id: CHECK_ID,
                 nowisor_check_version: CHECK_VERSION,
@@ -224,8 +241,9 @@
                 framework_mappings: MAPPINGS,
                 evidence: {
                     status: 'not_applicable',
-                    reason: 'no_agent_classes_present',
-                    classes_probed: CLASSES.length
+                    reason: naReason,
+                    classes_probed: CLASSES.length,
+                    tables_unresolved: unresolved
                 },
                 severity: 4,
                 remediation_id: 'aig-005-na',
@@ -269,6 +287,7 @@
                 claim_boundary: 'technical_levers_only_procedure_not_scannable',
                 classes_assessed: assessed.length,
                 classes_lacking_lever: lacking.length,
+                tables_unresolved: unresolved,
                 levers_tested: [
                     'per_class_disable_property',
                     'plugin_toggle',
