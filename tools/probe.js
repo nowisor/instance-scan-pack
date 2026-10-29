@@ -8,7 +8,7 @@
 // Prints the pack version and build string. Writes nothing. ES5, ASCII.
 
 (function nowisorProbe() {
-    var PACK_VERSION = '1.4.0'
+    var PACK_VERSION = '1.4.1'
     var TOOL_VERSION = '1.1.0'
     var ON = 'sys_security_acl.active=true^sys_security_acl.'
     var EMPTY = 'conditionISEMPTY^scriptISEMPTY'

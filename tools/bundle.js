@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v2.1.0 - emits nowisor-scan-bundle schema 2
+// nowisor bundle tool v2.2.0 - emits nowisor-scan-bundle schema 2
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -72,8 +72,8 @@
     // to true before you run (R-PACK-1: run OFF first, then ON, and record
     // both timings). OFF: the bundle carries the smaller ACL reads only.
     var READ_EMPTY_ACLS = false
-    var PACK_VERSION = '1.4.0'
-    var TOOL_VERSION = '2.1.0'
+    var PACK_VERSION = '1.4.1'
+    var TOOL_VERSION = '2.2.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     // Schema 2 prints one section per line. A read longer than this goes on
@@ -1255,7 +1255,10 @@
         ['sn_aia_external_agent_provider', '', 'sys_id,name,is_secondary,'
             + 'version'],
         ['sn_aia_external_agent_configuration', '', 'sys_id,name,'
-            + 'external_agent_provider,synchronous']
+            + 'external_agent_provider,synchronous'],
+        // pack 1.4.1 (WI-AI-2 Slice 2, AI-014): threat-analysis configuration
+        ['sn_ai_sp_threat_analysis_config', '', 'sys_id,active,sample_size,'
+            + 'analysis_type']
     ]
     var AI_IDENTITY = 'identity_typeINai_agent,machine'
     var AI_ID_READS = [
@@ -1333,6 +1336,17 @@
             checkRead(AI_ID_READS[ir2][0], AI_ID_READS[ir2][1],
                 AI_ID_READS[ir2][2])
         }
+    }
+    // pack 1.4.1 (AI-001/002/003): two AI properties by name, always read
+    checkRead('sys_properties', 'nameINsn_aia.enable_aiagents_discovery,'
+        + 'sn_aia.external_agent_guardian_check', 'sys_id,name,value')
+    // pack 1.4.1 (AI-015): AI Control Tower's open security tasks, counted
+    if (aiHave.indexOf('sn_ai_sp_asset_security_task') !== -1) {
+        table('sn_ai_sp_asset_security_task', {
+            sysparm_query: 'active=true',
+            sysparm_fields: 'sys_id',
+            sysparm_limit: '1'
+        }, true)
     }
     for (var co = 0; co < AI_COUNT_ONLY.length; co++) {
         if (aiHave.indexOf(AI_COUNT_ONLY[co]) !== -1) {
