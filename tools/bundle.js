@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v2.2.0 - emits nowisor-scan-bundle schema 2
+// nowisor bundle tool v2.3.0 - emits nowisor-scan-bundle schema 2
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -34,6 +34,13 @@
 // external agent providers, the user names of AI and machine identities and
 // which of them hold admin or security_admin, and a row count of each AI table
 // the Table API does not serve.
+// Since pack 1.4.2, Security Center (Instance Scan) results: whether Security
+// Center is installed and its version, the hardening compliance score, the
+// native scans (number, state, type, finding count, duration, date), the
+// check inventory (name, active, category, priority, class - never a check's
+// code), and for the newest completed scan which check each finding is for
+// and whether it is muted, the checks it executed and its category scores.
+// It reads what an earlier scan left; it never starts one.
 // No ticket, CMDB or end-user records.
 //
 // INTEGRITY
@@ -51,7 +58,8 @@
 // upgrade-history reads), pack 1.3.10 (the origin fields on the ACL,
 // script-include, job and dictionary reads, the four counted dynamic-code
 // pattern reads, the table-origin read and the knowledge-base reads) and
-// pack 1.4.0 (the paged AI-surface reads), which are plain GlideRecord
+// pack 1.4.0 (the paged AI-surface reads) and pack 1.4.2 (the Security
+// Center reads), which are plain GlideRecord
 // queries: an admin's GlideRecordSecure query drops
 // rows, so the read comes back short of its total. The 500-row empty-ACL
 // summary read also carries origin fields since 1.3.10 but stays a
@@ -72,8 +80,8 @@
     // to true before you run (R-PACK-1: run OFF first, then ON, and record
     // both timings). OFF: the bundle carries the smaller ACL reads only.
     var READ_EMPTY_ACLS = false
-    var PACK_VERSION = '1.4.1'
-    var TOOL_VERSION = '2.2.0'
+    var PACK_VERSION = '1.4.2'
+    var TOOL_VERSION = '2.3.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     // Schema 2 prints one section per line. A read longer than this goes on
@@ -839,10 +847,12 @@
         sysparm_fields: 'name,type,target_type',
         sysparm_limit: '100'
     })
+    // pack 1.4.2 (WI-ISC-1): counted - the Security Center section below
+    // reads this answer too, and judges it against its total
     table('sn_vsc_instance_hardening_settings', {
         sysparm_fields: 'harc_name,risk_score,score_impact,compliance_status',
         sysparm_limit: '500'
-    })
+    }, true)
     table('sys_security_acl', {
         sysparm_query: 'active=true^scriptISNOTEMPTY^scriptCONTAINSreturn true',
         sysparm_fields: 'name,operation,script',
@@ -1354,6 +1364,228 @@
                 sysparm_fields: 'sys_id',
                 sysparm_limit: '1'
             }, true)
+        }
+    }
+
+    // --- Security Center (vsme-app lib/isc/read-set.js), pack 1.4.2 ---------
+    // pack 1.4.2 (WI-ISC-1): the advisor's Security Center reads, made as it
+    // makes them (lib/isc/read.js), in its order and on its conditions. First
+    // Security Center's own scope; when it is installed (or the read cannot
+    // say), the web-service flags and the dictionary entries of the fields
+    // read below; the hardening compliance score when its fields are there;
+    // then, when the scan fields are there, the native scans and the check
+    // inventory, and for the newest completed scan its findings (paged), the
+    // checks it executed and its scores. The hardening settings read is the
+    // collector's, made once. No field list names a check's code. Plain
+    // GlideRecord queries, each counted. Nothing here starts a scan: run one
+    // yourself before running this if you want it in the report (optional).
+    section('isc')
+    var ISC_FIELDS = [
+        ['scan_result', 'number,state,scan_type,finding_count,execution_time'],
+        ['scan_check', 'name,active,category,priority'],
+        ['scan_finding', 'result,check,muted'],
+        ['scan_check_execution', 'result,check'],
+        ['scan_score', 'result,category,score'],
+        ['sn_vsc_hardening_compliance_scores',
+            'harc_score,harc_compliant,harc_collected'],
+        ['sn_vsc_instance_hardening_settings', 'compliance_status']
+    ]
+    var ISC_CORE = ['scan_result', 'scan_check', 'scan_finding']
+    ISC_CORE.push('scan_check_execution')
+    var ISC_HARD = ['sn_vsc_hardening_compliance_scores']
+    ISC_HARD.push('sn_vsc_instance_hardening_settings')
+    var ISC_FINDING_PAGE = 1000
+    var ISC_FINDING_MAX_PAGES = 20
+    var ISC_CHECK_PAGE = 1000
+    var ISC_CHECK_MAX_PAGES = 10
+
+    function iscRead(path, params) {
+        return table(path, params, true, true)
+    }
+
+    function iscText(v) {
+        if (v === undefined || v === null) {
+            return ''
+        }
+        if (typeof v === 'object') {
+            if (v.value === undefined || v.value === null) {
+                return ''
+            }
+            return String(v.value)
+        }
+        return String(v)
+    }
+
+    // every field the advisor reads on these tables, in the dictionary rows
+    function iscVerified(dict, have, names) {
+        if (dict.error) {
+            return false
+        }
+        for (var vn = 0; vn < names.length; vn++) {
+            for (var vf = 0; vf < ISC_FIELDS.length; vf++) {
+                if (ISC_FIELDS[vf][0] === names[vn]) {
+                    var vEach = ISC_FIELDS[vf][1].split(',')
+                    for (var ve = 0; ve < vEach.length; ve++) {
+                        if (!have[names[vn] + '.' + vEach[ve]]) {
+                            return false
+                        }
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    var iscScope = iscRead('sys_scope', {
+        sysparm_query: 'scope=sn_vsc',
+        sysparm_fields: 'scope,version,active',
+        sysparm_limit: '1'
+    })
+    // installed: true / false, or null when the read cannot say (then the
+    // reads go on, as the advisor's do)
+    var iscInstalled = null
+    if (!iscScope.error && iscScope.total !== null) {
+        var iscScopeRows = listOf(iscScope.result)
+        var iscWhole = iscScopeRows.length >= iscScope.total
+        if (iscScope.total <= 1 && iscWhole) {
+            iscInstalled = false
+            for (var isx = 0; isx < iscScopeRows.length; isx++) {
+                var isAct = iscText(iscScopeRows[isx].active).toLowerCase()
+                if (isAct === 'true') {
+                    iscInstalled = true
+                }
+            }
+        }
+    }
+    if (iscInstalled !== false) {
+        var iscNames = []
+        var iscElements = []
+        for (var ifx = 0; ifx < ISC_FIELDS.length; ifx++) {
+            iscNames.push(ISC_FIELDS[ifx][0])
+            var iscEach = ISC_FIELDS[ifx][1].split(',')
+            for (var iex = 0; iex < iscEach.length; iex++) {
+                if (iscElements.indexOf(iscEach[iex]) === -1) {
+                    iscElements.push(iscEach[iex])
+                }
+            }
+        }
+        iscRead('sys_db_object', {
+            sysparm_query: 'nameIN' + iscNames.join(','),
+            sysparm_fields: 'name,ws_access',
+            sysparm_limit: String(iscNames.length * 2)
+        })
+        var iscDictLimit = iscNames.length * iscElements.length
+        if (iscDictLimit < 50) {
+            iscDictLimit = 50
+        }
+        var iscDict = iscRead('sys_dictionary', {
+            sysparm_query: 'nameIN' + iscNames.join(',')
+                + '^elementIN' + iscElements.join(','),
+            sysparm_fields: 'name,element',
+            sysparm_limit: String(iscDictLimit)
+        })
+        var iscHave = {}
+        if (!iscDict.error) {
+            var iscDictRows = listOf(iscDict.result)
+            for (var idx = 0; idx < iscDictRows.length; idx++) {
+                var idName = iscText(iscDictRows[idx].name)
+                var idEl = iscText(iscDictRows[idx].element)
+                iscHave[idName + '.' + idEl] = true
+            }
+        }
+        if (iscVerified(iscDict, iscHave, ISC_HARD)) {
+            iscRead('sn_vsc_hardening_compliance_scores', {
+                sysparm_query: 'ORDERBYDESCharc_collected',
+                sysparm_fields: 'harc_score,harc_compliant,harc_collected',
+                sysparm_limit: '1'
+            })
+        }
+        if (iscVerified(iscDict, iscHave, ISC_CORE)) {
+            var iscResults = iscRead('scan_result', {
+                sysparm_query: 'ORDERBYDESCsys_created_on',
+                sysparm_fields: 'sys_id,number,state,scan_type,finding_count,'
+                    + 'execution_time,sys_created_on',
+                sysparm_limit: '100'
+            })
+            // paged to completion, at most 10 pages, as the advisor pages
+            var iscCSeen = 0
+            var iscCTotal = 0
+            for (var icx = 0; icx < ISC_CHECK_MAX_PAGES; icx++) {
+                var iscCPage = {
+                    sysparm_query: 'ORDERBYsys_id',
+                    sysparm_fields: 'sys_id,name,active,category,priority,'
+                        + 'sys_class_name',
+                    sysparm_limit: String(ISC_CHECK_PAGE)
+                }
+                if (icx > 0) {
+                    iscCPage.sysparm_offset = String(icx * ISC_CHECK_PAGE)
+                }
+                var iscC = iscRead('scan_check', iscCPage)
+                if (iscC.error || iscC.total === null) {
+                    break
+                }
+                if (iscC.total > iscCTotal) {
+                    iscCTotal = iscC.total
+                }
+                var iscCGot = listOf(iscC.result).length
+                iscCSeen += iscCGot
+                if (iscCSeen >= iscCTotal || iscCGot < ISC_CHECK_PAGE) {
+                    break
+                }
+            }
+            // the newest completed scan: the first complete row of the
+            // newest-first read
+            var iscRid = null
+            var iscRows = []
+            if (!iscResults.error) {
+                iscRows = listOf(iscResults.result)
+            }
+            for (var irx = 0; irx < iscRows.length; irx++) {
+                if (iscText(iscRows[irx].state) === 'complete') {
+                    iscRid = iscText(iscRows[irx].sys_id)
+                    break
+                }
+            }
+            if (iscRid !== null && /^[0-9a-f]{32}$/.test(iscRid)) {
+                // paged to completion, at most 20 pages, as the advisor pages
+                var iscSeen = 0
+                var iscTotal = 0
+                for (var ipx = 0; ipx < ISC_FINDING_MAX_PAGES; ipx++) {
+                    var iscPage = {
+                        sysparm_query: 'result=' + iscRid + '^ORDERBYsys_id',
+                        sysparm_fields: 'check,muted',
+                        sysparm_limit: String(ISC_FINDING_PAGE)
+                    }
+                    if (ipx > 0) {
+                        iscPage.sysparm_offset = String(ipx * ISC_FINDING_PAGE)
+                    }
+                    var iscF = iscRead('scan_finding', iscPage)
+                    if (iscF.error || iscF.total === null) {
+                        break
+                    }
+                    if (iscF.total > iscTotal) {
+                        iscTotal = iscF.total
+                    }
+                    var iscGot = listOf(iscF.result).length
+                    iscSeen += iscGot
+                    if (iscSeen >= iscTotal || iscGot < ISC_FINDING_PAGE) {
+                        break
+                    }
+                }
+                iscRead('scan_check_execution', {
+                    sysparm_query: 'result=' + iscRid + '^ORDERBYsys_id',
+                    sysparm_fields: 'check',
+                    sysparm_limit: '1000'
+                })
+                // its predicate field verified first, as the advisor does
+                if (iscVerified(iscDict, iscHave, ['scan_score'])) {
+                    iscRead('scan_score', {
+                        sysparm_query: 'result=' + iscRid + '^ORDERBYcategory',
+                        sysparm_fields: 'category,score',
+                        sysparm_limit: '100'
+                    })
+                }
+            }
         }
     }
 

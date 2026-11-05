@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.4.1
+- **Pack version:** 1.4.2
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -133,7 +133,7 @@ The script is **idempotent**. Safe to re-run. If you upgrade the pack later (`no
 
 ### Step 5 — Verify
 
-Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.4.1) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
+Navigate to **System Definition → Scan → Scan Checks**. You should see one nowisor check per `manifest.json` entry (49 checks in 1.4.2) under the `x_nowisor_isp` scope — all active except the 2 the manifest marks `active: false` (`nowisor-hardcoded-credentials` and `nowisor-direct-property-write`, deferred to v1.1 per `V1_RETROSPECTIVE_TIER2.md`).
 
 ## Running scans
 
@@ -182,6 +182,8 @@ Offline mode — run the scan yourself, upload the results
 Use this if your instance is self-hosted, on-prem, or you prefer not to grant API access.
 Nothing connects to your instance from outside. No credentials leave your organisation.
 
+0. If you want Security Center corroboration in the report, run an Instance Scan on the instance
+   before running the script. It is optional; the scan runs without it.
 1. Get the script — [`tools/bundle.js`](./tools/bundle.js) (in the app, **Instances → Upload results**
    has Copy script and Download bundle.js, with the file's sha256 to compare against this one).
 2. In your instance: System Definition → Scripts - Background. Paste. Run script. (Sub-production
@@ -205,7 +207,10 @@ Nothing connects to your instance from outside. No credentials leave your organi
    field metadata, and the AI agent surface: agent definitions with their role and instruction text,
    tool definitions by name, type and target table (no script text), the inputs each agent passes its
    tools (secret-shaped values redacted in-instance), teams, use cases, MCP and agent-provider
-   registrations, and the user names of AI and machine identities. It does not contain platform
+   registrations, and the user names of AI and machine identities. With Security Center installed it
+   also contains the results of the native scanner: Instance Scan check names, categories, priorities and
+   active flags (never the script of a check), recent scan dates, which checks the newest scan flagged and
+   executed, its category scores, and the hardening score. It does not contain platform
    passwords, tickets, CMDB records or end-user records. ACL script and agent instruction text is copied
    as-is: anything a developer wrote into an ACL script or an agent's instructions — including a
    hardcoded secret — will be in the file, so review it. Bundle processing is covered by the Nowisor DPA; the
@@ -244,7 +249,7 @@ queries for the check reads added in 1.3.9 and 1.3.10, `GlideRecordSecure` queri
 
 ### What the script reads
 
-Every read `tools/bundle.js` records — 139 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) and in pack 1.4.0 (the AI-surface reads, paged with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
+Every read `tools/bundle.js` records — 148 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to, and the Security Center reads from the advisor's Security Center read set. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) in pack 1.4.0 (the AI-surface reads, paged with their counts) and in pack 1.4.2 (the Security Center reads, with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
 
 | Part | Table | Query | Fields | Rows per request | When |
 |---|---|---|---|---|---|
@@ -387,6 +392,15 @@ Every read `tools/bundle.js` records — 139 distinct reads — listed from the 
 | release reading | `sys_plugins` | — | `sys_id,name,source,active,description,version` | 2000 | every run |
 | release reading | `sys_scope` | — | `name,version,active,scope,sys_id,private,vendor` | 2000, paged | every run |
 | access diagnosis | `sys_user` | — | `sys_id` | 1 | sys_properties and sys_security_acl both refused (403); or (WI-AI-2) readCheck's unfiltered count for the AI identity read, when the dictionary lists sys_user.identity_type |
+| Security Center | `sys_scope` | `scope=sn_vsc` | `scope,version,active` | 1 | every run |
+| Security Center | `sys_db_object` | `nameINscan_result,scan_check,scan_finding,scan_check_execution,scan_score,sn_vsc_hardening_compliance_scores,sn_vsc_instance_hardening_settings` | `name,ws_access` | 14 | the sn_vsc scope read does not show Security Center absent or inactive |
+| Security Center | `sys_dictionary` | `nameINscan_result,scan_check,scan_finding,scan_check_execution,scan_score,sn_vsc_hardening_compliance_scores,sn_vsc_instance_hardening_settings^elementINnumber,state,scan_type,finding_count,execution_time,name,active,category,priority,result,check,muted,score,harc_score,harc_compliant,harc_collected,compliance_status` | `name,element` | 119 | the sn_vsc scope read does not show Security Center absent or inactive |
+| Security Center | `sn_vsc_hardening_compliance_scores` | `ORDERBYDESCharc_collected` | `harc_score,harc_compliant,harc_collected` | 1 | the dictionary read lists every hardening field |
+| Security Center | `scan_result` | `ORDERBYDESCsys_created_on` | `sys_id,number,state,scan_type,finding_count,execution_time,sys_created_on` | 100 | the dictionary read lists every scan field |
+| Security Center | `scan_check` | `ORDERBYsys_id` | `sys_id,name,active,category,priority,sys_class_name` | 1000 | the dictionary read lists every scan field |
+| Security Center | `scan_finding` | `result=<newest completed scan_result sys_id>^ORDERBYsys_id` | `check,muted` | 1000, paged | the scan_result read has a completed scan (the newest one) |
+| Security Center | `scan_check_execution` | `result=<newest completed scan_result sys_id>^ORDERBYsys_id` | `check` | 1000 | the scan_result read has a completed scan (the newest one) |
+| Security Center | `scan_score` | `result=<newest completed scan_result sys_id>^ORDERBYcategory` | `category,score` | 100 | the scan_result read has a completed scan (the newest one) |
 
 <!-- END bundle-read-plan -->
 
@@ -543,6 +557,8 @@ Pack versions follow semver:
 
 ### Changelog
 
+**1.4.2 (unreleased — WI-ISC-1)** — offline bundle (`tools/bundle.js` 2.3.0, bundle schema 2 unchanged): a new last section, `isc`, makes the advisor's Security Center reads in-instance, in its order and on its conditions. First Security Center's own scope (`sys_scope` where `scope=sn_vsc`: scope, version, active); when it is installed, the web-service flags of the seven tables read below and the dictionary entries of the fields they are read for; the hardening compliance score (`sn_vsc_hardening_compliance_scores`, the newest row) when its fields are there; then, when the scan fields are there, the native scans (`scan_result`, newest first, 100 rows) and the check inventory (`scan_check`: name, active, category, priority, class — never a check's code), and for the newest completed scan its findings (`scan_finding`: the check and whether it is muted, paged by 1,000 up to 20 pages), the checks it executed (`scan_check_execution`) and its category scores (`scan_score`). Each read is a plain GlideRecord query with its row count. The collector's `sn_vsc_instance_hardening_settings` read now carries its row count too, so the hardening compliance status is judged against its total; it is still made once. The section reads what an earlier Instance Scan left and never starts one: running one before the script is the optional step 0 of offline mode. A bundle from an earlier pack still ingests; its Security Center context is reported not assessed (not in the bundle). No check added (49).
+
 **1.4.1 (unreleased — WI-AI-2 Slice 2)** — offline bundle (`tools/bundle.js` 2.2.0, bundle schema 2 unchanged): three more AI-surface reads, for the advisor's AI checks. Two system properties by name, always read — `sn_aia.enable_aiagents_discovery` and `sn_aia.external_agent_guardian_check`; the AI threat-analysis settings (`sn_ai_sp_threat_analysis_config`: active, sample size, analysis type) where the instance has the table; and a row count of AI Control Tower's open security tasks (`sn_ai_sp_asset_security_task` where `active=true`) — a table the Table API does not serve, so only the bundle can count it. Read-only, plain GlideRecord queries like the 1.4.0 AI reads; no check added (49).
 
 **1.4.0 (unreleased — WI-AI-2 Slice 1)** — offline bundle (`tools/bundle.js` 2.1.0, bundle schema 2 unchanged): the bundle makes the advisor's new AI-surface reads. First, which AI tables the instance has, with each table's web-service flag, and whether `sys_user` carries `identity_type`; then, for each table it has, AI agents (with their role and instruction text), agent configuration, tools (name, type and target table — no script text; Slice 3 reads it), the tool each agent uses and the inputs it passes it, teams and their members, use cases and their triggers, provisioned MCP servers, MCP tool definitions and the server-tool links, external MCP servers and their tools, external agent providers and configurations — each read whole, paged by `sys_id` with its row count, as a plain GlideRecord query — and the AI and machine identities (`identity_type` `ai_agent` or `machine`) with their admin and security_admin grants. 35 further AI tables are read for a row count only: the 29 the Table API does not serve on an instance that has them (web-service access off — a connection is refused them, the bundle counts them) and six Gate 0 did not look at. Secret-shaped values inside the agent-tool inputs are replaced by `[redacted]` in-instance, by the same rule as property values — a rule this release widens for property values too: `authorization`, `private_key`, `bearer` and "API key" now count as secret-shaped names, each on a token boundary. A table the instance does not have is never read. The whole-table reads send no unfiltered count (there is no predicate to prove parsed). Every AI check that named the table `sn_aia_use_case`, which no instance has, now reads `sn_aia_usecase` (R-AI-1): thirteen checks at 1.0.1, and the three AI export tools at 1.0.1 — the discovery export filters use cases on `active` only where the instance has that column, and counts autonomous use cases by the stored value `autopilot`; a check asking for active rows of a table with no `active` column gets no count rather than every row; and the kill-switch check reports a class whose table carries neither an `active` flag nor a run-as field as not assessable, never as lacking a lever. Check count unchanged (49).
@@ -685,7 +701,7 @@ read anything from the advisor account.
 ### "No findings produced after scan"
 
 - **Suite not bootstrapped.** Run `bootstrap/install-suite.js`. Without it, the platform's full-scan engine never executes the checks.
-- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.4.1; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
+- **Checks inactive.** Navigate to Scan Checks list filtered by scope `x_nowisor_isp` — confirm every check `manifest.json` marks `active: true` is `active=true` (47 of the 49 in 1.4.2; `nowisor-hardcoded-credentials` and `nowisor-direct-property-write` ship deferred and are expected to be inactive).
 - **Cross-scope read denied.** If scan_check_execution records show "permission denied" on Global tables, your instance enforces strict scope isolation. The pack ships 17 `CrossScopePrivilege` records — verify they were committed in the update set.
 
 ### "Build fails with TypeScript errors in keys.ts"
@@ -733,7 +749,7 @@ if (cur.split(',').indexOf('nowisor') === -1) {
 gs.print('all_company_keys = ' + gs.getProperty('sn_appauthor.all_company_keys'));
 ```
 
-Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.4.1). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
+Re-run `npx now-sdk install --auth <alias>` — it now completes and creates the `x_nowisor_isp` scope with every check in `manifest.json` (49 checks in 1.4.2). Revert anytime by removing `nowisor` from the property. **Do not rename the scope** to dodge this — `x_nowisor_isp` is hardcoded in `bootstrap/install-suite.js` and every `check.sys_scope.scope=x_nowisor_isp` query.
 
 If the `syslog` shows a *different* line instead of the third-party block, two other prerequisites can produce the same null-application surface error: (a) **ServiceNow IDE < 4.1.1 or `sn_appclient` < 29.0.4** — entitle/upgrade from the Store, sync Application Manager; (b) a **`glide.appcreator.company.code`** scope-prefix mismatch. Always read the line above the `ScopedAppUploadProcessor` error first. Note: `dist/update-sets/nowisor-agent-v1.0.0.tar.gz` is a now-sdk package, **not** a plain Update-Set XML — it routes through the same processor and fails identically; there is no SDK-free import path today.
 
