@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.4.2
+- **Pack version:** 1.4.5
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -249,7 +249,7 @@ queries for the check reads added in 1.3.9 and 1.3.10, `GlideRecordSecure` queri
 
 ### What the script reads
 
-Every read `tools/bundle.js` records — 148 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to, and the Security Center reads from the advisor's Security Center read set. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) in pack 1.4.0 (the AI-surface reads, paged with their counts) and in pack 1.4.2 (the Security Center reads, with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
+Every read `tools/bundle.js` records — 152 distinct reads — listed from the advisor's own read inventory, the same list a connected scan is held to, and the Security Center reads from the advisor's Security Center read set. A value known only at run time (an ACL's sys_id, a knowledge base's sys_id, a date) is shown as a placeholder. The check reads added in pack 1.3.9 (on `sys_ws_operation`, `sys_upgrade_history` and the typed `sys_dictionary` read, with their counts) in pack 1.3.10 (the ACL, script-include, job, table-origin and knowledge-base check reads, with their counts) in pack 1.4.0 (the AI-surface reads, paged with their counts) and in pack 1.4.2 (the Security Center reads, with their counts) run as plain GlideRecord queries; every other read runs as a GlideRecordSecure query; a read that asks for a row count is counted with GlideAggregate; nothing is written. This section is generated from the inventory and the script; it is not typed.
 
 | Part | Table | Query | Fields | Rows per request | When |
 |---|---|---|---|---|---|
@@ -292,7 +292,7 @@ Every read `tools/bundle.js` records — 148 distinct reads — listed from the 
 | posture | `sys_dictionary` | `nameINsys_user,sys_user_has_role,sys_user_grmember,discovery_credentials^element=NULL^ORDERBYsys_id` | `name,audit` | 1000, paged | every run |
 | posture | `sysauto_script` | `run_asISNOTEMPTY^ORDERBYsys_id` | `name,run_as,run_as.user_name,active,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | every run |
 | posture | `sys_security_acl` | — | `sys_id` | 1 | every run |
-| posture | `sys_security_acl_role` | — | `sys_id` | 1 | only when `READ_EMPTY_ACLS` is set to `true` (ACL-001's paged reads; off as shipped) |
+| posture | `sys_security_acl_role` | — | `sys_id` | 1 | every run |
 | posture | `sys_dictionary` | — | `sys_id` | 1 | every run |
 | posture | `sysauto_script` | — | `sys_id` | 1 | every run |
 | posture | `oauth_entity` | `active=true` | `name,type,default_grant_type,inbound_grant_type,access_token_lifespan,refresh_token_lifespan` | 100 | every run |
@@ -316,6 +316,10 @@ Every read `tools/bundle.js` records — 148 distinct reads — listed from the 
 | posture | `sys_script_include` | `client_callable=true^active=true^scriptLIKEGlideScopedEvaluator^ORDERBYsys_id` | `sys_id,name,api_name,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | every run |
 | posture | `sys_db_object` | `name=x_nowisor_vsme_health^ORDERBYsys_id` | `name,sys_package` | 1000, paged | every run |
 | posture | `sys_user_has_role` | `role.name=admin^state=active^user.active=true` | `user.user_name,user.web_service_access_only` | 500 | every run |
+| posture | `sys_dictionary` | `name=sys_user^elementINactive,sys_domain^ORDERBYsys_id` | `name,element` | 1000, paged | every run |
+| posture | `sys_db_object` | `name=domain^ORname=sys_user^ORDERBYsys_id` | `name` | 1000, paged | every run |
+| posture | `sys_security_acl` | `type.name=REST_Endpoint^operation.name=execute^nameINTable API,Aggregate API,Attachment API,Import Set API^ORDERBYsys_id` | `sys_id,name,active,type.name,operation.name,sys_updated_on,sys_updated_by,sys_package,sys_package.name,sys_package.sys_class_name,sys_policy,sys_created_on` | 1000, paged | every run |
+| posture | `sys_security_acl_role` | `sys_security_acl.type.name=REST_Endpoint^sys_security_acl.operation.name=execute^sys_security_acl.nameINTable API,Aggregate API,Attachment API,Import Set API^ORDERBYsys_id` | `sys_security_acl,sys_security_acl.name,sys_security_acl.type.name,sys_security_acl.operation.name,sys_user_role,sys_user_role.name` | 1000, paged | every run |
 | AI surface | `sys_db_object` | `nameINsn_aia_agent,sn_mcp_server,sys_mcp_server` | `name` | 10 | every run |
 | AI surface | `sys_store_app` | `nameLIKENow Assist^ORnameLIKEGenerative AI^ORnameLIKEAI Agent^ORnameLIKEControl Tower^ORnameLIKEBuild Agent` | `name,active,version` | 50 | every run |
 | AI surface | `sys_scope` | `nameLIKENow Assist^ORnameLIKEGenerative AI^ORnameLIKEAI Agent^ORnameLIKEControl Tower^ORnameLIKEBuild Agent` | `name,active` | 50 | every run |
@@ -556,6 +560,8 @@ Pack versions follow semver:
 - Major (x.0.0): finding schema breaking change (bumps `nowisor_finding_schema`); backwards-compat window: current + previous, 12 months
 
 ### Changelog
+
+**1.4.5 (unreleased — REST API gate)** — offline bundle (`tools/bundle.js` 2.4.0, bundle schema 2 unchanged): four counted reads and one count for the advisor's REST API gate check. The four REST_Endpoint ACLs that gate the Table, Aggregate, Attachment and Import Set APIs (`sys_security_acl`: name, active, last update, origin); the role rows on those four (`sys_security_acl_role`: the ACL and the role's name); whether the instance has the `domain` table, that is whether Domain Support is installed (`sys_db_object`); whether `sys_user` carries `sys_domain` (`sys_dictionary`); and only when it does, a count of active users, web-service-only users included, who sit outside the global domain. It is a count only: no user record is copied.
 
 **1.4.2 (unreleased — WI-ISC-1)** — offline bundle (`tools/bundle.js` 2.3.0, bundle schema 2 unchanged): a new last section, `isc`, makes the advisor's Security Center reads in-instance, in its order and on its conditions. First Security Center's own scope (`sys_scope` where `scope=sn_vsc`: scope, version, active); when it is installed, the web-service flags of the seven tables read below and the dictionary entries of the fields they are read for; the hardening compliance score (`sn_vsc_hardening_compliance_scores`, the newest row) when its fields are there; then, when the scan fields are there, the native scans (`scan_result`, newest first, 100 rows) and the check inventory (`scan_check`: name, active, category, priority, class — never a check's code), and for the newest completed scan its findings (`scan_finding`: the check and whether it is muted, paged by 1,000 up to 20 pages), the checks it executed (`scan_check_execution`) and its category scores (`scan_score`). Each read is a plain GlideRecord query with its row count. The collector's `sn_vsc_instance_hardening_settings` read now carries its row count too, so the hardening compliance status is judged against its total; it is still made once. The section reads what an earlier Instance Scan left and never starts one: running one before the script is the optional step 0 of offline mode. A bundle from an earlier pack still ingests; its Security Center context is reported not assessed (not in the bundle). No check added (49).
 

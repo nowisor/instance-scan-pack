@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v2.3.0 - emits nowisor-scan-bundle schema 2
+// nowisor bundle tool v2.4.0 - emits nowisor-scan-bundle schema 2
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -41,6 +41,10 @@
 // code), and for the newest completed scan which check each finding is for
 // and whether it is muted, the checks it executed and its category scores.
 // It reads what an earlier scan left; it never starts one.
+// Since pack 1.4.5, the REST API gate: the four REST_Endpoint ACLs that gate
+// the Table, Aggregate, Attachment and Import Set APIs (name, active, last
+// update, origin), the role on each, and a count of active users outside the
+// global domain where users carry a domain - a count only, no user record.
 // No ticket, CMDB or end-user records.
 //
 // INTEGRITY
@@ -58,8 +62,9 @@
 // upgrade-history reads), pack 1.3.10 (the origin fields on the ACL,
 // script-include, job and dictionary reads, the four counted dynamic-code
 // pattern reads, the table-origin read and the knowledge-base reads) and
-// pack 1.4.0 (the paged AI-surface reads) and pack 1.4.2 (the Security
-// Center reads), which are plain GlideRecord
+// pack 1.4.0 (the paged AI-surface reads), pack 1.4.2 (the Security
+// Center reads) and pack 1.4.5 (the REST API gate reads and the user count),
+// which are plain GlideRecord
 // queries: an admin's GlideRecordSecure query drops
 // rows, so the read comes back short of its total. The 500-row empty-ACL
 // summary read also carries origin fields since 1.3.10 but stays a
@@ -80,8 +85,8 @@
     // to true before you run (R-PACK-1: run OFF first, then ON, and record
     // both timings). OFF: the bundle carries the smaller ACL reads only.
     var READ_EMPTY_ACLS = false
-    var PACK_VERSION = '1.4.2'
-    var TOOL_VERSION = '2.3.0'
+    var PACK_VERSION = '1.4.5'
+    var TOOL_VERSION = '2.4.0'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     // Schema 2 prints one section per line. A read longer than this goes on
@@ -1170,6 +1175,52 @@
     var AUD = 'nameINsys_user,sys_user_has_role,sys_user_grmember,'
     AUD += 'discovery_credentials^element=NULL'
     checkRead('sys_dictionary', AUD, 'name,audit')
+    // EXP-006 (pack 1.4.5): the four REST_Endpoint gate ACLs and the role
+    // rows on them, by the same predicate; whether the domain table exists;
+    // whether sys_user carries sys_domain; and, only when it does, the
+    // count of active users outside the global domain, web-service-only
+    // users included (owner ruling 5, 2026-11-09; != drops empty values,
+    // so ISNOTEMPTY first).
+    // The app's fallback filter for an unreadable operation.name is a
+    // connection read only: this script reads as admin (owner ruling 7)
+    var GATE_NAMES = 'Table API,Aggregate API,Attachment API,Import Set API'
+    var GATE = 'type.name=REST_Endpoint^operation.name=execute'
+    GATE += '^nameIN' + GATE_NAMES
+    checkRead('sys_security_acl', GATE,
+        'sys_id,name,active,type.name,operation.name,sys_updated_on,'
+        + 'sys_updated_by,' + ORIGIN)
+    var GATE_ROLES = 'sys_security_acl.type.name=REST_Endpoint'
+    GATE_ROLES += '^sys_security_acl.operation.name=execute'
+    GATE_ROLES += '^sys_security_acl.nameIN' + GATE_NAMES
+    var GATE_ROLE_FIELDS = 'sys_security_acl,sys_security_acl.name,'
+    GATE_ROLE_FIELDS += 'sys_security_acl.type.name,'
+    GATE_ROLE_FIELDS += 'sys_security_acl.operation.name,'
+    GATE_ROLE_FIELDS += 'sys_user_role,sys_user_role.name'
+    checkRead('sys_security_acl_role', GATE_ROLES, GATE_ROLE_FIELDS)
+    // whether Domain Support is installed: the domain table's row (owner
+    // ruling 2, 2026-11-09 - the field and a non-global user alone are on
+    // a stock PDI), with sys_user's row, which every instance has
+    checkRead('sys_db_object', 'name=domain^ORname=sys_user', 'name')
+    // the domain field and the other field the count filters on: the
+    // count is sent only when both come back (the advisor's rule)
+    var domainRows = checkRead('sys_dictionary',
+        'name=sys_user^elementINactive,sys_domain',
+        'name,element')
+    var domainSeen = {}
+    if (domainRows !== null) {
+        for (var dr = 0; dr < domainRows.length; dr++) {
+            domainSeen[domainRows[dr].element] = true
+        }
+    }
+    if (domainSeen.sys_domain && domainSeen.active) {
+        var NON_GLOBAL = 'active=true'
+        NON_GLOBAL += '^sys_domainISNOTEMPTY^sys_domain!=global'
+        table('sys_user', {
+            sysparm_query: NON_GLOBAL,
+            sysparm_fields: 'sys_id',
+            sysparm_limit: '1'
+        }, true, true)
+    }
     // ACL-001: the empty rules and the role rows on them, both paged - the
     // largest reads, last
     if (READ_EMPTY_ACLS) {
