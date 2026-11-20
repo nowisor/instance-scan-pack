@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v2.4.0 - emits nowisor-scan-bundle schema 2
+// nowisor bundle tool v2.4.1 - emits nowisor-scan-bundle schema 2
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -17,6 +17,8 @@
 //
 // TIME: no read starts after 240 s (CAP_MS). A read not reached is recorded
 // as not read, and the advisor reports its checks UNKNOWN, never passed.
+// Since pack 1.4.6 the transaction-log reads (READ_TRANSACTION_LOG, below)
+// are the last section and off as shipped: one took 415 s on an instance.
 //
 // WHAT IS IN THE FILE (review it before you send it)
 // Configuration property values - except password-type and secret-shaped
@@ -85,8 +87,16 @@
     // to true before you run (R-PACK-1: run OFF first, then ON, and record
     // both timings). OFF: the bundle carries the smaller ACL reads only.
     var READ_EMPTY_ACLS = false
-    var PACK_VERSION = '1.4.5'
-    var TOOL_VERSION = '2.4.0'
+    // PRIV-002's transaction-log reads - for each web-service-only admin, a
+    // count of its transactions over 90 days - are the largest single query
+    // and may take minutes on an instance with a large transaction log. OFF
+    // by default. To include them, set this to true before you run (R-PACK-1:
+    // run OFF first, then ON, and record both timings). OFF: each read is
+    // recorded as not read, and the check it feeds is not assessed. ON: they
+    // are made last, so the time cap stops nothing else.
+    var READ_TRANSACTION_LOG = false
+    var PACK_VERSION = '1.4.6'
+    var TOOL_VERSION = '2.4.1'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     // Schema 2 prints one section per line. A read longer than this goes on
@@ -96,6 +106,7 @@
     // started is recorded as not read (its checks are UNKNOWN, never PASS).
     var CAP_MS = 240000
     var NOT_READ = 'NOT_READ_TIME_CAP'
+    var NOT_READ_OFF = 'NOT_READ_TRANSACTION_LOG_OFF'
     var DAY_MS = 24 * 60 * 60 * 1000
 
     // --- The one redaction rule (vsme-app lib/secret-property.js) ---------
@@ -524,6 +535,18 @@
         return { code: NOT_READ, message: m }
     }
 
+    // A read switched off (READ_TRANSACTION_LOG false): recorded, as asked,
+    // with the reason it was not made - the bundle carries every read the
+    // advisor asks for, and the advisor reports the check UNKNOWN
+    function switchedOff(path, params) {
+        var t0 = new Date().getTime()
+        var p = copy(params)
+        var e = { code: NOT_READ_OFF }
+        e.message = 'not read: transaction log reads are off'
+        reads.push({ kind: 'table', path: path, params: p, error: e })
+        timed(t0, path, p)
+    }
+
     function copy(params) {
         var out = {}
         for (var k in params) {
@@ -875,16 +898,18 @@
         sysparm_limit: '1'
     }, true)
     // pack 1.3.10: each admin holder's web-service-only flag, and for every such
-    // account its transactions over 90 days (the count only)
+    // account its transactions over 90 days (the count only) - since pack
+    // 1.4.6 read in the last section, transaction_log, when switched on
     var wsa = table('sys_user_has_role', {
         sysparm_query: ADMIN_Q,
         sysparm_fields: 'user.user_name,user.web_service_access_only',
         sysparm_limit: '500'
     })
+    var wsaUsers = []
+    var since90 = ''
     if (!wsa.error) {
-        var since90 = new Date(capturedMs - 90 * DAY_MS).toISOString()
+        since90 = new Date(capturedMs - 90 * DAY_MS).toISOString()
         since90 = since90.slice(0, 19).replace('T', ' ')
-        var wsaUsers = []
         for (var w = 0; w < wsa.result.length; w++) {
             var wr = wsa.result[w]
             var wu = wr['user.user_name']
@@ -899,14 +924,6 @@
             }
         }
         wsaUsers.sort()
-        for (var wx = 0; wx < wsaUsers.length; wx++) {
-            table('syslog_transaction', {
-                sysparm_query: 'sys_created_by=' + wsaUsers[wx]
-                    + '^sys_created_on>=' + since90,
-                sysparm_fields: 'sys_id,sys_created_by,sys_created_on',
-                sysparm_limit: '1'
-            }, true)
-        }
     }
     // OAuth applications (pack 1.3.10: the grant-type columns the instance
     // has - default_grant_type, inbound_grant_type; there is no grant_type)
@@ -1640,6 +1657,26 @@
         }
     }
 
+    // --- The transaction log (pack 1.4.6) ----------------------------------
+    // PRIV-002's reads, one per web-service-only admin the collector found,
+    // last: the largest single query (414,980 ms for one on an instance) stops
+    // nothing else at the time cap. ON: made under the cap rule, as every
+    // read. OFF: recorded as not read.
+    section('transaction_log')
+    for (var wx = 0; wx < wsaUsers.length; wx++) {
+        var txParams = {
+            sysparm_query: 'sys_created_by=' + wsaUsers[wx]
+                + '^sys_created_on>=' + since90,
+            sysparm_fields: 'sys_id,sys_created_by,sys_created_on',
+            sysparm_limit: '1'
+        }
+        if (READ_TRANSACTION_LOG) {
+            table('syslog_transaction', txParams, true)
+        } else {
+            switchedOff('syslog_transaction', txParams)
+        }
+    }
+
     // --- The document (schema 2) ---------------------------------------------
     // One section per printed line: "<name> <json>". header, timings, then
     // one "read" line per read (a long read goes on over "rows" lines), then
@@ -1879,6 +1916,7 @@
         pack_version: PACK_VERSION,
         tool_version: TOOL_VERSION,
         read_empty_acls: READ_EMPTY_ACLS,
+        read_transaction_log: READ_TRANSACTION_LOG,
         captured_at: capturedAt,
         instance_url: base,
         instance_id: String(gs.getProperty('instance_id', '')),
@@ -1940,6 +1978,7 @@
     gs.print('nowisor bundle schema ' + BUNDLE_SCHEMA)
     gs.print('pack ' + PACK_VERSION)
     gs.print('empty ACL reads ' + (READ_EMPTY_ACLS ? 'ON' : 'OFF'))
+    gs.print('transaction log reads ' + (READ_TRANSACTION_LOG ? 'ON' : 'OFF'))
     var iid = String(gs.getProperty('instance_id', ''))
     gs.print('instance ' + base + ' (' + iid + ')')
     gs.print('captured ' + capturedAt + ' reads ' + reads.length)

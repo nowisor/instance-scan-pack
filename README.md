@@ -6,7 +6,7 @@
 
 Open-source ServiceNow security check pack that runs inside your instance and produces structured findings consumed by the [nowisor](https://nowisor.com) AI security advisor.
 
-- **Pack version:** 1.4.5
+- **Pack version:** 1.4.6
 - **Finding schema:** v1 (stable; backwards-compat policy in §Schema and versioning)
 - **Log-export schema:** v1 (stable; companion schema for the twin-sensor log export)
 - **License:** Apache-2.0
@@ -194,6 +194,10 @@ Nothing connects to your instance from outside. No credentials leave your organi
    The script's largest reads — every empty ACL and its role rows — are off as shipped; to include
    them, change `var READ_EMPTY_ACLS = false` to `true` at the top before you run. The output line
    `empty ACL reads ON` or `OFF` says which ran.
+   The transaction-log reads — for each web-service-only admin, a count of its transactions over 90
+   days — are off as shipped too, because one can take minutes; to include them, change
+   `var READ_TRANSACTION_LOG = false` to `true` (they run last), and the output line
+   `transaction log reads ON` or `OFF` says which ran.
 3. Copy everything between ---NOWISOR_BUNDLE--- and ---NOWISOR_BUNDLE_END--- into a file named
    nowisor-scan-bundle.json (pasting the whole output page also works).
 4. Review the file —
@@ -560,6 +564,8 @@ Pack versions follow semver:
 - Major (x.0.0): finding schema breaking change (bumps `nowisor_finding_schema`); backwards-compat window: current + previous, 12 months
 
 ### Changelog
+
+**1.4.6 (unreleased — transaction-log reads off, hotfix)** — offline bundle (`tools/bundle.js` 2.4.1, bundle schema 2 unchanged): on a customer instance one transaction-log read (`syslog_transaction` for one web-service-only admin over 90 days, counted, 1 row) took 414,980 ms and used the whole 240 s budget at read 27 of 96. Those reads, one per web-service-only admin, now run in a new last section, `transaction_log`, after `isc`, and are off as shipped: `var READ_TRANSACTION_LOG = false`. Off, each is recorded in the bundle as not read ("not read: transaction log reads are off"), and the stale-admin check (PRIV-002) is not assessed for those accounts — never passed. On, they are made last, under the same time cap, with the same parameters as before. The header records `read_transaction_log`, and the output prints `transaction log reads ON` or `OFF`. The admin web-service-only flag read that decides which accounts are read stays where it was. No read is added, removed or re-parameterised. No change to any check or manifest check entry. Check count unchanged.
 
 **1.4.5 (unreleased — REST API gate)** — offline bundle (`tools/bundle.js` 2.4.0, bundle schema 2 unchanged): four counted reads and one count for the advisor's REST API gate check. The four REST_Endpoint ACLs that gate the Table, Aggregate, Attachment and Import Set APIs (`sys_security_acl`: name, active, last update, origin); the role rows on those four (`sys_security_acl_role`: the ACL and the role's name); whether the instance has the `domain` table, that is whether Domain Support is installed (`sys_db_object`); whether `sys_user` carries `sys_domain` (`sys_dictionary`); and only when it does, a count of active users, web-service-only users included, who sit outside the global domain. It is a count only: no user record is copied.
 
