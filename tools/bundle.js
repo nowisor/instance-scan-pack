@@ -1,6 +1,6 @@
 // Read-only: safe for production use
 //
-// nowisor bundle tool v2.4.1 - emits nowisor-scan-bundle schema 2
+// nowisor bundle tool v2.4.2 - emits nowisor-scan-bundle schema 2
 // Paste-into-Background-Script offline mode: no connection, no credentials.
 //
 // The fifth install-free sensor in tools/. Performs, inside your instance,
@@ -19,6 +19,19 @@
 // as not read, and the advisor reports its checks UNKNOWN, never passed.
 // Since pack 1.4.6 the transaction-log reads (READ_TRANSACTION_LOG, below)
 // are the last section and off as shipped: one took 415 s on an instance.
+//
+// SESSION (pack 1.4.7): run it from an admin session, in the global scope,
+// without impersonation. Before any read the script checks the session it
+// runs in and prints one "session" line. Outside the global scope it stops
+// at its first line, having read nothing. A capture is partial when the
+// session is not an admin's, is impersonating, is refused one of four
+// tables, or is given fewer rows than the instance counts on a read of
+// properties by name. The script says so in plain words and goes on. Rows
+// the session is not given are missing from the capture, so its results
+// are incomplete: run it again from an admin session.
+// An admin is given fewer property rows than the instance counts when it
+// walks them all: that count is recorded as a fact and decides nothing.
+// It cannot tell whether "Execute in sandbox?" is ticked: leave it unticked.
 //
 // WHAT IS IN THE FILE (review it before you send it)
 // Configuration property values - except password-type and secret-shaped
@@ -47,6 +60,11 @@
 // the Table, Aggregate, Attachment and Import Set APIs (name, active, last
 // update, origin), the role on each, and a count of active users outside the
 // global domain where users carry a domain - a count only, no user record.
+// Since pack 1.4.7, the session the script ran in: whether it holds admin,
+// its scope, whether it is impersonating, how many configuration properties
+// it can see of how many exist, and which of four tables refuse it - no user
+// data beyond the run-by account. And the name of each ACL operation the
+// rules it read refer to by id.
 // No ticket, CMDB or end-user records.
 //
 // INTEGRITY
@@ -80,6 +98,22 @@
 // ES5-only (Rhino ES0). ASCII-only, short lines, one statement per line.
 
 (function nowisorBundle() {
+    // GLOBAL SCOPE ONLY. The first statement: outside the global scope the
+    // script stops here, having read nothing. From an application scope the
+    // platform records each cross-scope read as a privilege, and that is a
+    // write. "rhino.global" is what a Background Script reports in global.
+    var runScope = null
+    try {
+        runScope = gs.getCurrentScopeName()
+        runScope = runScope === null || runScope === undefined ? null : String(runScope)
+    } catch (e) {
+        runScope = null
+    }
+    if (runScope !== 'global' && runScope !== 'rhino.global') {
+        gs.info('nowisor bundle: run this script in the global scope. It ran in'
+            + ' scope ' + runScope + ' and stopped. Nothing was read.')
+        return
+    }
     var BUNDLE_SCHEMA = 2
     // ACL-001's paged reads - every empty ACL and the role rows on them -
     // are the largest reads and may not fit the ~300 s Background Script
@@ -95,8 +129,8 @@
     // recorded as not read, and the check it feeds is not assessed. ON: they
     // are made last, so the time cap stops nothing else.
     var READ_TRANSACTION_LOG = false
-    var PACK_VERSION = '1.4.6'
-    var TOOL_VERSION = '2.4.1'
+    var PACK_VERSION = '1.4.7'
+    var TOOL_VERSION = '2.4.2'
     var SEPARATOR = '---NOWISOR_BUNDLE---'
     var END_SEPARATOR = '---NOWISOR_BUNDLE_END---'
     // Schema 2 prints one section per line. A read longer than this goes on
@@ -710,6 +744,151 @@
     var ADMIN_Q = 'role.name=admin^state=active^user.active=true'
     var SECADMIN_Q = 'role.name=security_admin^state=active^user.active=true'
 
+    // --- The session (pack 1.4.7) ---------------------------------------------
+    // Before any read: what the session running this script may see. None of
+    // it is a recorded read - a role check, the name of the
+    // impersonating user (empty when there is none), two counts of
+    // sys_properties (every row, and the rows this session is given) and a
+    // read-permission check on four tables. Printed in the header as
+    // `session`, and as the first output line.
+    section('session')
+    var sessionStart = new Date().getTime()
+    var SESSION_TABLES = ['sys_plugins', 'sysauto_script']
+    SESSION_TABLES.push('sys_rate_limit_rules', 'sys_upgrade_history')
+
+    // The rows of a table this session is given: a GlideRecordSecure query,
+    // counted row by row (its row count alone ignores the row ACLs)
+    function visibleCount(path) {
+        try {
+            var vr = new GlideRecordSecure(path)
+            if (!vr.isValid()) {
+                return null
+            }
+            if (!vr.canRead()) {
+                return 0
+            }
+            vr.query()
+            var vn = 0
+            while (vr.next()) {
+                vn++
+            }
+            return vn
+        } catch (e) {
+            return null
+        }
+    }
+
+    function refusedTables(names) {
+        var out = []
+        for (var ri = 0; ri < names.length; ri++) {
+            try {
+                var rr = new GlideRecordSecure(names[ri])
+                if (rr.isValid() && !rr.canRead()) {
+                    out.push(names[ri])
+                }
+            } catch (e) {
+                // a check that failed is neither a refusal nor a pass:
+                // the whole list is not known
+                return null
+            }
+        }
+        return out
+    }
+
+    function glideSession() {
+        var s = { admin: null, scope: null, impersonating: false }
+        s.props_visible = null
+        s.props_total = null
+        s.refused = []
+        try {
+            s.admin = String(gs.hasRole('admin')) === 'true'
+        } catch (e) {
+            s.admin = null
+        }
+        // read once, as the script's first statement
+        s.scope = runScope
+        // true or false, never null: a name means the session impersonates
+        try {
+            var imp = gs.getImpersonatingUserName()
+            s.impersonating = imp !== null && imp !== undefined
+            s.impersonating = s.impersonating && String(imp) !== ''
+        } catch (e) {
+            s.impersonating = false
+        }
+        s.props_total = glideCount('sys_properties', '')
+        s.props_visible = visibleCount('sys_properties')
+        s.refused = refusedTables(SESSION_TABLES)
+        return s
+    }
+
+    var session = null
+    if (hook) {
+        session = hook('session', 'session', {})
+    }
+    if (session === undefined || session === null) {
+        session = glideSession()
+    }
+    // null: a permission check failed, so which tables refuse is not known
+    if (!isArray(session.refused)) {
+        session.refused = null
+    }
+    session.impersonating = session.impersonating === true
+    // Why the capture is partial, if it is. The two property counts are facts
+    // and not a reason: an admin walking every row is given fewer than the
+    // instance counts. A fourth reason, named_read_short, is added when a
+    // read of properties by name returns fewer rows than its count. The
+    // scope is not one: outside global the script stopped at its first line.
+    var sessionReasons = []
+    if (session.admin !== true) {
+        sessionReasons.push('not_admin')
+    }
+    if (session.impersonating) {
+        sessionReasons.push('impersonating')
+    }
+    if (session.refused !== null && session.refused.length > 0) {
+        sessionReasons.push('tables_refused')
+    }
+    var noticed = false
+    function partialNotice() {
+        if (noticed) {
+            return
+        }
+        noticed = true
+        gs.print('PARTIAL CAPTURE: this session cannot read everything the scan'
+            + ' asks for.')
+        gs.print('The script goes on, but rows this session is not given are'
+            + ' missing from the capture: its results will be incomplete.')
+        gs.print('For a complete capture, run it again from an admin session,'
+            + ' in the global scope, without impersonation.')
+    }
+    // A read of properties by name: fewer rows than the instance counts,
+    // below the read's own limit, is rows this session was not given.
+    var namedShort = false
+    function named(ans, limit) {
+        if (!ans.error && typeof ans.total === 'number') {
+            var got = ans.result.length
+            if (got < ans.total && got < limit) {
+                namedShort = true
+            }
+        }
+        return ans
+    }
+    var sessionLine = 'session admin=' + session.admin
+    sessionLine += ' scope=' + session.scope
+    sessionLine += ' impersonating=' + session.impersonating
+    sessionLine += ' properties ' + session.props_visible
+    sessionLine += ' of ' + session.props_total + ' refused '
+    if (session.refused === null) {
+        sessionLine += 'not checked'
+    } else {
+        sessionLine += session.refused.length ? session.refused.join(',') : 'none'
+    }
+    gs.print(sessionLine)
+    if (sessionReasons.length > 0) {
+        partialNotice()
+    }
+    current.ms += new Date().getTime() - sessionStart
+
     // --- The tenant reading (lib/ncf/tenant-schema-extractor.js) ------------
     // First, as a connected scan reads it (R-VER-7): it verifies every rule
     // identifier, so a run the time cap stops later keeps the checks whose
@@ -734,11 +913,11 @@
 
     var idq = 'name=glide.buildtag.last^ORname=glide.buildtag'
     idq += '^ORname=instance_id^ORname=instance_name'
-    var ident = table('sys_properties', {
+    var ident = named(table('sys_properties', {
         sysparm_query: idq,
         sysparm_fields: 'name,value',
         sysparm_limit: '10'
-    })
+    }, true), 10)
     var gotTag = false
     var gotId = false
     if (!ident.error) {
@@ -803,6 +982,10 @@
     // pack 1.3.10: sys_scope with its private flag and its vendor
     var INV_BASE = 'name,version,active,scope,sys_id'
     // pack 1.3.12: sys_scope (a required source) before sys_store_app
+    // pack 1.4.7: a GlideRecordSecure read prints a field the session may
+    // not read as empty. `scope` is such a field for a session that is not an
+    // admin's: every row then prints an empty scope. An admin run prints it
+    // on every row; the `session` line says which kind of run this was.
     var INV = [['sys_scope', INV_BASE + ',private,vendor'], ['sys_store_app', INV_BASE]]
     for (var iv = 0; iv < INV.length; iv++) {
         var itab = INV[iv][0]
@@ -833,11 +1016,13 @@
 
     section('collector')
     // hardening
-    var hard = table('sys_properties', {
+    // pack 1.4.7: every read of properties by name is counted, so a row the
+    // session was not given shows as rows below the count, never as "not set"
+    var hard = named(table('sys_properties', {
         sysparm_query: nameOr(HARDENING),
         sysparm_fields: 'name,value',
         sysparm_limit: '50'
-    })
+    }, true), 50)
     if (!hard.error) {
         table('sys_properties', {
             sysparm_query: 'nameLIKEpassword^ORnameLIKEcredential^ORnameLIKEsecret'
@@ -983,16 +1168,16 @@
         sysparm_fields: 'name,source',
         sysparm_limit: '500'
     })
-    table('sys_properties', {
+    named(table('sys_properties', {
         sysparm_query: nameOr(SESSION),
         sysparm_fields: 'name,value',
         sysparm_limit: '10'
-    })
-    table('sys_properties', {
+    }, true), 10)
+    named(table('sys_properties', {
         sysparm_query: nameOr(API_AUTH),
         sysparm_fields: 'name,value',
         sysparm_limit: '50'
-    })
+    }, true), 50)
     var dict = 'elementLIKEpassword^ORelementLIKEsecret^ORelementLIKEtoken'
     dict += '^ORelementLIKEkey^ORelementLIKEcredential'
     dict += '^ORcolumn_labelLIKEpassword^ORcolumn_labelLIKEsecret'
@@ -1163,11 +1348,17 @@
     // the company code and the no-criteria property, by name, counted
     var OPROPS = 'nameINglide.appcreator.company.code,'
     OPROPS += 'glide.knowman.block_access_with_no_user_criteria'
-    table('sys_properties', {
+    named(table('sys_properties', {
         sysparm_query: OPROPS,
         sysparm_fields: 'name,value',
         sysparm_limit: '4'
-    }, true)
+    }, true), 4)
+    // the last of the five reads of properties by name: a short one makes
+    // the capture partial, and says so here if nothing said so before
+    if (namedShort) {
+        sessionReasons.push('named_read_short')
+        partialNotice()
+    }
     // ACL-003: wildcard rules, with their origin
     checkRead('sys_security_acl', 'active=true^nameLIKE*^ORoperation=*',
         'name,operation,' + ORIGIN)
@@ -1896,6 +2087,95 @@
         return { head: head, rows: out }
     }
 
+    // pack 1.4.7: the name of every ACL operation the reads refer to by id.
+    // A core operation's id is its name (read, write, create, delete,
+    // execute) and prints as before; any other prints its 32-character id,
+    // and its name is looked up here, once, 100 ids a query. Not a recorded
+    // read. null: the names were not read - the time cap was reached before
+    // the lookup, or the lookup was refused or failed. Never an empty map.
+    var SYS_ID = /^[0-9a-f]{32}$/
+
+    function operationIds() {
+        var seen = {}
+        var ids = []
+        for (var oi = 0; oi < reads.length; oi++) {
+            var rd = reads[oi]
+            if (rd.path !== 'sys_security_acl' || !rd.result) {
+                continue
+            }
+            for (var oj = 0; oj < rd.result.length; oj++) {
+                var oc = rd.result[oj].operation
+                if (oc !== null && typeof oc === 'object') {
+                    oc = oc.value
+                }
+                if (typeof oc === 'string' && SYS_ID.test(oc) && !seen[oc]) {
+                    seen[oc] = true
+                    ids.push(oc)
+                }
+            }
+        }
+        ids.sort()
+        return ids
+    }
+
+    function glideOperationNames(ids) {
+        var out = []
+        var og = new GlideRecordSecure('sys_security_operation')
+        if (!og.isValid() || !og.canRead()) {
+            return null
+        }
+        og.addQuery('sys_id', 'IN', ids.join(','))
+        og.query()
+        while (og.next()) {
+            // a name this session may not read arrives here as "null" or
+            // empty; operationNames() below records it as null
+            out.push({
+                sys_id: String(og.getUniqueValue()),
+                name: String(og.getValue('name'))
+            })
+        }
+        return out
+    }
+
+    function operationNames() {
+        if (new Date().getTime() - startMs >= CAP_MS) {
+            return null
+        }
+        var ids = operationIds()
+        var names = {}
+        for (var ob = 0; ob < ids.length; ob += 100) {
+            var chunk = ids.slice(ob, ob + 100)
+            var found = null
+            try {
+                if (hook) {
+                    found = hook('operations', 'sys_security_operation', {
+                        sysparm_query: 'sys_idIN' + chunk.join(',')
+                    })
+                } else {
+                    found = glideOperationNames(chunk)
+                }
+            } catch (e) {
+                found = null
+            }
+            if (found === undefined || found === null) {
+                return null
+            }
+            for (var fx = 0; fx < found.length; fx++) {
+                var fr = found[fx]
+                if (fr && chunk.indexOf(String(fr.sys_id)) !== -1) {
+                    // the row came back without a readable name: null
+                    var fn = fr.name
+                    var noName = fn === null || fn === undefined
+                    noName = noName || String(fn) === '' || String(fn) === 'null'
+                    names[String(fr.sys_id)] = noName ? null : String(fn)
+                }
+            }
+        }
+        return names
+    }
+
+    var aclOperations = operationNames()
+
     var lines = []
     var chain = ''
 
@@ -1929,6 +2209,17 @@
             sys_id: String(gs.getUserID()),
             user_name: String(gs.getUserName())
         },
+        session: {
+            admin: session.admin,
+            scope: session.scope,
+            impersonating: session.impersonating,
+            props_visible: session.props_visible,
+            props_total: session.props_total,
+            refused: session.refused,
+            partial: sessionReasons.length > 0,
+            reasons: sessionReasons
+        },
+        acl_operations: aclOperations,
         duration_ms: duration,
         cap_ms: CAP_MS,
         capped: cappedAt,
